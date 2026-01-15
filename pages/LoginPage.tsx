@@ -1,7 +1,6 @@
 
 import React, { useState } from 'react';
-// 修復：從本地的 firebase.ts 導入 auth 與 signInAnonymously，確保與 Mock 後端一致
-import { auth, signInAnonymously } from '../firebase';
+import { auth, signInAnonymously } from '../mockBackend';
 import { createUserProfile } from '../services/userService';
 import { Role } from '../types';
 import { Fingerprint, User, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
@@ -20,21 +19,17 @@ const LoginPage: React.FC = () => {
     setError('');
 
     try {
-      // 1. 使用本地 Mock 的 signInAnonymously 獲取合法 Session
+      // 使用 Mock 的 signInAnonymously，不會發送外部請求
       const userCredential = await signInAnonymously(auth);
       const uid = userCredential.user.uid;
       
-      // 2. 決定角色邏輯 (目前仍沿用您的名稱含 admin 規則，方便測試)
       const role = name.toLowerCase().includes('admin') ? Role.ADMIN : Role.REVIEWER;
       const virtualEmail = `${name}@caseflow.internal`;
 
-      // 3. 在 Firestore 建立 Profile
       await createUserProfile(uid, virtualEmail, role, name);
-      
-      // 成功後，App.tsx 的 onAuthStateChanged 會自動感知並跳轉
     } catch (err: any) {
-      console.error("Firebase Auth Error:", err);
-      setError('連線至雲端後端失敗，請檢查網路。');
+      console.error("Auth Error:", err);
+      setError('登入處理失敗，請稍後再試。');
     } finally {
       setLoading(false);
     }
@@ -76,7 +71,7 @@ const LoginPage: React.FC = () => {
               </div>
               <div className="p-4 bg-amber-50 rounded-xl border border-amber-100">
                 <p className="text-[10px] text-amber-700 font-bold leading-relaxed">
-                  💡 注意：名稱含 "admin" 將具備管理員權限。這是在雲端運行的正式版本，所有操作都將被紀錄。
+                  💡 注意：名稱含 "admin" 將具備管理員權限。這是一個純本地運行的 Demo 版本。
                 </p>
               </div>
             </div>
@@ -100,7 +95,7 @@ const LoginPage: React.FC = () => {
         </div>
         
         <div className="mt-12 text-center text-[10px] font-black text-slate-300 uppercase tracking-[0.3em]">
-          CaseFlow Production v2.5.1
+          CaseFlow Local Edition v2.5.2
         </div>
       </div>
     </div>

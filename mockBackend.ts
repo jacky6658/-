@@ -1,7 +1,7 @@
 
 /**
- * CaseFlow Mock Backend Bridge
- * 完全模擬 Auth 與實時監聽介面。
+ * CaseFlow 純本地 Mock 服務
+ * 這個檔案模擬了所有的登入與資料通訊邏輯，不需要連網即可運作。
  */
 
 export interface User {
@@ -9,27 +9,28 @@ export interface User {
   isAnonymous: boolean;
 }
 
-// 模擬持久化狀態
 let currentUser: User | null = JSON.parse(localStorage.getItem('caseflow_user') || 'null');
 const authListeners: ((user: User | null) => void)[] = [];
 
+// 模擬 Firebase Auth 對象
 export const auth = {
   get currentUser() { return currentUser; }
 };
 
-export const onAuthStateChanged = (_: any, callback: (user: User | null) => void) => {
+export const onAuthStateChanged = (authObj: any, callback: (user: User | null) => void) => {
   authListeners.push(callback);
-  callback(currentUser);
+  // 模擬網路延遲後回傳狀態
+  setTimeout(() => callback(currentUser), 10);
   return () => {
     const idx = authListeners.indexOf(callback);
     if (idx > -1) authListeners.splice(idx, 1);
   };
 };
 
-export const signInAnonymously = async (_: any) => {
-  await new Promise(r => setTimeout(r, 150));
+export const signInAnonymously = async (authObj: any) => {
+  // 不需要任何 Key，直接隨機生成 UID
   const mockUser: User = { 
-    uid: 'mock-id-' + Math.random().toString(36).substring(2, 9), 
+    uid: 'user-' + Math.random().toString(36).substring(2, 9), 
     isAnonymous: true 
   };
   currentUser = mockUser;
@@ -38,7 +39,7 @@ export const signInAnonymously = async (_: any) => {
   return { user: mockUser };
 };
 
-export const signOut = async (_: any) => {
+export const signOut = async (authObj: any) => {
   currentUser = null;
   localStorage.removeItem('caseflow_user');
   localStorage.removeItem('caseflow_profile');
@@ -47,4 +48,4 @@ export const signOut = async (_: any) => {
 
 export const db = {};
 
-console.log('Backend Status: Local Storage Mock Active (Build Safe Mode).');
+console.log('系統提示：目前運行於「純本地模式」，無需設定後端金鑰即可使用。');

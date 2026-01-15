@@ -1,5 +1,5 @@
 
-import { auth } from '../firebase';
+import { auth } from '../mockBackend';
 import { AuditLog, AuditAction } from '../types';
 import { getUserProfile } from './userService';
 
@@ -33,7 +33,7 @@ export const logAction = async (
 
   const logs = getLogs();
   logs.unshift(newLog);
-  saveLogs(logs.slice(0, 500)); // 只保留最後 500 筆
+  saveLogs(logs.slice(0, 500));
 };
 
 export const fetchLogs = async (leadId?: string) => {

@@ -1,5 +1,5 @@
 
-import { auth } from '../firebase';
+import { auth } from '../mockBackend';
 import { Lead, LeadStatus, Decision, AuditAction } from '../types';
 import { logAction } from './auditService';
 import { getUserProfile } from './userService';
@@ -9,7 +9,6 @@ const STORAGE_KEY = 'caseflow_leads_db';
 const getLeads = (): Lead[] => JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
 const saveLeads = (leads: Lead[]) => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(leads));
-  // 觸發廣播事件模擬多裝置同步（同瀏覽器分頁）
   window.dispatchEvent(new Event('leads_updated'));
 };
 
@@ -74,6 +73,6 @@ export const deleteLead = async (id: string) => {
 export const subscribeToLeads = (callback: (leads: Lead[]) => void) => {
   const handler = () => callback(getLeads());
   window.addEventListener('leads_updated', handler);
-  handler(); // 初始載入
+  handler();
   return () => window.removeEventListener('leads_updated', handler);
 };

@@ -1,78 +1,93 @@
-# CaseFlow CRM | 系統技術規格書 (Engineering Spec)
+# CaseFlow CRM | 開發者技術手冊 (Developer Specification)
 
-本專案為一套專為中小型團隊設計的案件管理系統，目前處於 **Stage 1 (Mocked Cloud)** 階段，旨在模擬雲端協作體驗並提供完整的 SQL 遷移技術方案。
-
----
-
-## 🛠 1. 系統架構 (System Architecture)
-
-### 前端 (Frontend)
-- **Framework**: React 19 (Functional Components + Hooks)
-- **UI Stack**: Tailwind CSS (JIT Engine), Lucide React (Icons)
-- **Build Tool**: Vite (ESM Based)
-- **State Management**: React State + Service Layer Pattern (解耦數據來源與組件渲染)
-
-### 數據層 (Persistence Layer - Current: LocalStorage)
-為了確保 demo 期間無需配置外部環境即可運行，系統目前透過 `services/` 層封裝 `localStorage`。此設計允許工程師在 **Stage 2** 輕鬆切換至實體資料庫。
+本專案是一套基於 React 19 的「多人即時協作 CRM」。專為工程師設計，採用 **Service Pattern** 以利未來從 LocalStorage 無縫遷移至 **PostgreSQL**。
 
 ---
 
-## 📊 2. 資料庫設計與 SQL 遷移方案 (PostgreSQL Plan)
+## 🏗️ 1. 專案架構 (Project Structure)
 
-未來遷移至 **PostgreSQL** 時，建議採用以下實體模型設計：
+專案採用「層次化架構 (Layered Architecture)」，確保邏輯與渲染完全分離：
 
-### A. 使用者表 (`users`)
-| 欄位名 | 型別 | 屬性 | 說明 |
-| :--- | :--- | :--- | :--- |
-| `id` | UUID | PRIMARY KEY | 使用者唯一識別碼 |
-| `email` | TEXT | UNIQUE, NOT NULL | 登入郵件 |
-| `display_name` | TEXT | NOT NULL | 顯示名稱 |
-| `role` | ENUM | ADMIN / REVIEWER | 系統權限等級 |
-| `created_at` | TIMESTAMPTZ | DEFAULT NOW() | 註冊時間 |
-
-### B. 案件表 (`leads`)
-| 欄位名 | 型別 | 屬性 | 說明 |
-| :--- | :--- | :--- | :--- |
-| `id` | UUID | PRIMARY KEY | 案件識別碼 |
-| `platform` | VARCHAR(20) | NOT NULL | 來源平台 (FB, Threads, etc.) |
-| `platform_id` | TEXT | NOT NULL | 案主名稱 |
-| `need` | TEXT | NOT NULL | 需求全文 |
-| `budget_text` | TEXT | | 預算描述 |
-| `status` | VARCHAR(20) | DEFAULT '待篩選' | 流程狀態 |
-| `decision` | VARCHAR(20) | DEFAULT 'pending' | 審核結果 |
-| `created_by` | UUID | REFERENCES users(id) | 建立人 FK |
-| `assigned_to` | UUID | REFERENCES users(id) | 負責人 FK |
-
-### C. 審計日誌 (`audit_logs`)
-- 採用 `JSONB` 欄位儲存變更細節 (`before`/`after`)，以應對頻繁變動的業務邏輯。
+- `/components`: 純 UI 元件（Presentation Layer）。
+- `/pages`: 頁面路由與佈局組件。
+- `/services`: **核心邏輯層 (Business Logic)**。所有 DB 讀寫、AI 調用都在此處理。
+- `/types.ts`: 全域型別定義。所有數據結構以此為準（Single Source of Truth）。
+- `/firebase.ts`: 模擬後端橋接器 (Mock Auth/DB Interface)。
 
 ---
 
-## 🤖 3. AI 識別邏輯 (AI Pipeline)
+## 🛠️ 2. 核心功能模組說明
 
-系統整合 **Google Gemini 3 Flash**，核心邏輯位於 `services/aiService.ts`：
-1. **傳輸**: 採用 Base64 影像數據。
-2. **Schema Control**: 強制 LLM 輸出符合 `JSON Schema` 的結構化數據，確保前端表單能精確對應。
-3. **優化**: 在傳送 AI 之前，前端會自動進行圖片壓縮（`leadsPage.tsx` 中的 `resizeImage`），降低延遲並節省 Token。
+### A. AI 識別管線 (`services/aiService.ts`)
+- **輸入**: 圖片 Base64 (支援剪貼簿貼上或檔案上傳)。
+- **處理**: 
+  1. 前端預先 Resize (減少傳輸大小)。
+  2. 呼叫 Gemini 3 Flash，並套用強型別 JSON Schema。
+- **輸出**: 自動填充至 `LeadModal` 欄位。
+
+### B. 資料持久化與訂閱 (`services/leadService.ts`)
+- 現狀：透過 `localStorage` 儲存，並使用 `window.dispatchEvent` 模擬多視窗即時同步。
+- 遷移路徑：將 `getLeads` 內的 `localStorage` 操作改為 `fetch` 呼叫 API 即可。
+
+### C. 權限控管 (RBAC)
+- 透過 `UserProfile` 內的 `role` (ADMIN/REVIEWER) 判斷。
+- 管理員 (ADMIN): 具備全權限。
+- 夥伴 (REVIEWER): 僅能針對「待篩選」案件進行審核動作 (Decision)。
 
 ---
 
-## 🚀 4. 開發者查閱指引
+## 📊 3. PostgreSQL 實作建議 (ERD)
 
-### 環境需求
-- **API Key**: 必須設定 `process.env.API_KEY` 以啟用 AI 識別功能。
-- **Browser**: 支援現代瀏覽器 (ES2022+)。
+未來遷移至後端時，請參考以下結構建立 DB：
 
-### 啟動開發環境
-```bash
-npm install
-npm run dev
+```sql
+-- 1. 使用者 (Users)
+CREATE TABLE users (
+  uid UUID PRIMARY KEY,
+  displayName TEXT NOT NULL,
+  email TEXT UNIQUE NOT NULL,
+  role VARCHAR(10) CHECK (role IN ('ADMIN', 'REVIEWER')),
+  createdAt TIMESTAMP DEFAULT NOW()
+);
+
+-- 2. 案件 (Leads)
+CREATE TABLE leads (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  platform VARCHAR(20) NOT NULL,
+  platformId TEXT NOT NULL,
+  need TEXT NOT NULL,
+  budgetText TEXT,
+  phone VARCHAR(20),
+  email TEXT,
+  location TEXT,
+  status VARCHAR(20) DEFAULT '待篩選',
+  decision VARCHAR(10) DEFAULT 'pending',
+  priority INTEGER DEFAULT 3,
+  createdBy UUID REFERENCES users(uid),
+  createdAt TIMESTAMP DEFAULT NOW(),
+  updatedAt TIMESTAMP DEFAULT NOW()
+);
+
+-- 3. 審計 (Audit Logs)
+CREATE TABLE audit_logs (
+  id BIGSERIAL PRIMARY KEY,
+  leadId UUID REFERENCES leads(id),
+  actorUid UUID REFERENCES users(uid),
+  action VARCHAR(20),
+  diff JSONB, -- 儲存變更前後的欄位
+  createdAt TIMESTAMP DEFAULT NOW()
+);
 ```
 
-### 遷移至 PostgreSQL 步驟
-1. 建立後端 API (建議使用 Node.js / Go)。
-2. 導入 **Prisma** 或 **TypeORM** 定義上述 Schema。
-3. 修改 `services/leadService.ts` 中的 `fetch` 與 `save` 邏輯，改為呼叫後端 REST API。
+---
+
+## 🚀 4. 如何啟動
+
+1. **安裝依賴**: `npm install` (已移除所有 Firebase 實體套件，避免 Registry 錯誤)。
+2. **啟動**: `npm run dev`。
+3. **登入測試**: 
+   - 名稱輸入 `admin` -> 獲得管理員權限。
+   - 名稱隨意輸入 -> 獲得一般夥伴權限。
 
 ---
-*Last Updated: 2025-05-21 | Architecture v2.5.2 (Mocked-Ready)*
+*專案負責人: Senior Full-stack Engineer*

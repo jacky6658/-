@@ -1,6 +1,6 @@
+
 import React, { useState, useEffect } from 'react';
-import { onAuthStateChanged, signOut, type User } from './firebase';
-import { auth } from './firebase';
+import { onAuthStateChanged, signOut, type User, auth } from './mockBackend';
 import { getUserProfile } from './services/userService';
 import { UserProfile, Role, Lead } from './types';
 import Sidebar from './components/Sidebar';
@@ -21,8 +21,7 @@ const App: React.FC = () => {
   const [leads, setLeads] = useState<Lead[]>([]);
 
   useEffect(() => {
-    // 使用本地 Mock 的 onAuthStateChanged
-    const unsubscribe = onAuthStateChanged(auth, async (u: any) => {
+    const unsubscribe = onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (u) {
         const p = await getUserProfile(u.uid);

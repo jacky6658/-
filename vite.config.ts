@@ -1,3 +1,4 @@
+
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { defineConfig } from 'vite';
@@ -13,8 +14,8 @@ export default defineConfig({
   },
   plugins: [react()],
   define: {
-    // 確保建置時不會因為找不到 process 而失敗
-    'process.env': {}
+    // 移除會抹除 process.env 的定義，讓系統能正確抓到注入的 API_KEY
+    'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development')
   },
   resolve: {
     alias: {
