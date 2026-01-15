@@ -61,29 +61,27 @@ export interface Lead {
   note: string;
   links: string[];
   
-  // New Attributed Remarks
   internal_remarks?: string;
   remarks_author?: string;
   
-  // New Contact Fields
   phone?: string;
   email?: string;
   location?: string;
   
-  // Collaboration fields
   status: LeadStatus;
   decision: Decision;
+  decision_by?: string; // 新增：審核人姓名
   reject_reason?: RejectReason;
   review_note?: string;
-  assigned_to?: string; // UID
+  assigned_to?: string; 
   assigned_to_name?: string;
-  priority: number; // 1-5
+  priority: number; 
   
   created_by: string;
   created_by_name: string;
   created_at: string;
   updated_at: string;
-  last_action_by?: string; // 最後操作者姓名
+  last_action_by?: string; 
 }
 
 export enum AuditAction {
