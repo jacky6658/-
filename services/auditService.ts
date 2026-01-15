@@ -1,6 +1,8 @@
 
 import { auth, db } from '../firebase';
-import { AuditLog, AuditAction, UserProfile } from '../types';
+import { AuditLog, AuditAction } from '../types';
+import { collection, addDoc, query, where, orderBy, getDocs, limit } from 'firebase/firestore';
+import { getUserProfile } from './userService';
 
 const COLLECTION = 'audit_logs';
 
@@ -13,12 +15,10 @@ export const logAction = async (
   const user = auth.currentUser;
   if (!user) return;
 
-  const users: UserProfile[] = JSON.parse(localStorage.getItem('users') || '[]');
-  const profile = users.find(u => u.uid === user.uid);
-  const actor_name = profile?.displayName || user.email?.split('@')[0] || 'Unknown';
+  const profile = await getUserProfile(user.uid);
+  const actor_name = profile?.displayName || 'Unknown';
 
-  const newLog: AuditLog = {
-    id: Math.random().toString(36).substr(2, 9),
+  const newLog = {
     lead_id,
     actor_uid: user.uid,
     actor_name,
@@ -28,17 +28,20 @@ export const logAction = async (
     created_at: new Date().toISOString()
   };
 
-  const logs = JSON.parse(localStorage.getItem(COLLECTION) || '[]');
-  logs.unshift(newLog);
-  localStorage.setItem(COLLECTION, JSON.stringify(logs.slice(0, 200))); // Keep last 200
-  db.notify(COLLECTION);
+  await addDoc(collection(db, COLLECTION), newLog);
 };
 
-export const fetchLogs = async (leadId?: string, actorUid?: string) => {
-  let logs: AuditLog[] = JSON.parse(localStorage.getItem(COLLECTION) || '[]');
+export const fetchLogs = async (leadId?: string) => {
+  let q = query(collection(db, COLLECTION), orderBy('created_at', 'desc'), limit(100));
   
-  if (leadId) logs = logs.filter(l => l.lead_id === leadId);
-  if (actorUid) logs = logs.filter(l => l.actor_uid === actorUid);
+  if (leadId) {
+    q = query(collection(db, COLLECTION), where('lead_id', '==', leadId), orderBy('created_at', 'desc'));
+  }
 
+  const querySnapshot = await getDocs(q);
+  const logs: AuditLog[] = [];
+  querySnapshot.forEach((doc) => {
+    logs.push({ id: doc.id, ...doc.data() } as AuditLog);
+  });
   return logs;
 };

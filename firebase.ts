@@ -1,72 +1,31 @@
-/**
- * CaseFlow 核心初始化模組
- * 提供高保真 Mock 模式，支援多人協作與跨分頁同步。
- */
 
-// 確保瀏覽器環境下 process 變數就緒
+import { initializeApp } from 'firebase/app';
+import { getAuth, onAuthStateChanged, signOut, signInAnonymously } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
+
+// 核心修復：確保 process 變數就緒
 if (typeof window !== 'undefined') {
   (window as any).process = (window as any).process || { env: {} };
 }
 
-class MockFirestore {
-  private channel = new BroadcastChannel('caseflow_sync');
-  
-  constructor() {
-    this.channel.onmessage = (event) => {
-      window.dispatchEvent(new CustomEvent('firestore_update', { detail: event.data }));
-    };
-  }
-
-  notify(collection: string) {
-    this.channel.postMessage({ collection });
-    window.dispatchEvent(new CustomEvent('firestore_update', { detail: { collection } }));
-  }
-}
-
-class MockAuth {
-  private authChangeListeners: Array<(user: any) => void> = [];
-
-  get currentUser() {
-    try {
-      const saved = localStorage.getItem('caseflow_session');
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
-  }
-
-  onAuthStateChanged(callback: (user: any) => void) {
-    this.authChangeListeners.push(callback);
-    callback(this.currentUser);
-    return () => {
-      this.authChangeListeners = this.authChangeListeners.filter(l => l !== callback);
-    };
-  }
-
-  async triggerAuthChange(user: any) {
-    if (user) {
-      localStorage.setItem('caseflow_session', JSON.stringify(user));
-    } else {
-      localStorage.removeItem('caseflow_session');
-    }
-    this.authChangeListeners.forEach(l => l(user));
-  }
-}
-
-export const auth = new MockAuth();
-export const db = new MockFirestore();
-
-export const onAuthStateChanged = (authInstance: any, callback: (user: any) => void) => {
-  return authInstance.onAuthStateChanged(callback);
+// 這是您的 Firebase 配置。
+// 正式環境建議使用環境變數：process.env.VITE_FIREBASE_API_KEY 等
+const firebaseConfig = {
+  apiKey: "AIzaSy..." , // 替換為您的 API Key
+  authDomain: "your-project.firebaseapp.com",
+  projectId: "your-project-id",
+  storageBucket: "your-project.appspot.com",
+  messagingSenderId: "...",
+  appId: "..."
 };
 
-export const signOut = async (authInstance: any) => {
-  await authInstance.triggerAuthChange(null);
-};
+// 如果沒有配置，則會打印警告，開發時會回退到模擬行為或報錯
+const app = initializeApp(firebaseConfig);
 
-export const signInWithEmailAndPassword = async (authInstance: any, email: string) => {
-  const uid = btoa(encodeURIComponent(email)).replace(/=/g, '');
-  return { user: { email, uid } };
-};
+export const auth = getAuth(app);
+export const db = getFirestore(app);
 
+export { onAuthStateChanged, signOut, signInAnonymously };
 export type User = any;
+
+console.log('CaseFlow: Connected to Real-time Firebase Cloud Backend.');

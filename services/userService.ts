@@ -1,41 +1,33 @@
 
+import { db } from '../firebase';
 import { UserProfile, Role } from '../types';
+import { doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore';
 
 const COLLECTION = 'users';
 
-const getUsersFromStore = (): UserProfile[] => {
-  return JSON.parse(localStorage.getItem(COLLECTION) || '[]');
-};
-
 export const getUserProfile = async (uid: string): Promise<UserProfile | null> => {
-  const users = getUsersFromStore();
-  return users.find(u => u.uid === uid) || null;
+  const docRef = doc(db, COLLECTION, uid);
+  const docSnap = await getDoc(docRef);
+  if (docSnap.exists()) {
+    return docSnap.data() as UserProfile;
+  }
+  return null;
 };
 
 export const getAllUsers = async (): Promise<UserProfile[]> => {
-  return getUsersFromStore();
+  const querySnapshot = await getDocs(collection(db, COLLECTION));
+  const users: UserProfile[] = [];
+  querySnapshot.forEach((doc) => {
+    users.push(doc.data() as UserProfile);
+  });
+  return users;
 };
 
 export const createUserProfile = async (uid: string, email: string, role: Role, displayName: string) => {
-  const users = getUsersFromStore();
-  const existingIndex = users.findIndex(u => u.uid === uid);
-  
   const profile: UserProfile = { uid, email, role, displayName };
-  
-  if (existingIndex > -1) {
-    users[existingIndex] = profile;
-  } else {
-    users.push(profile);
-  }
-  
-  localStorage.setItem(COLLECTION, JSON.stringify(users));
+  await setDoc(doc(db, COLLECTION, uid), profile, { merge: true });
 };
 
 export const setUserRole = async (uid: string, role: Role) => {
-  const users = getUsersFromStore();
-  const index = users.findIndex(u => u.uid === uid);
-  if (index > -1) {
-    users[index].role = role;
-    localStorage.setItem(COLLECTION, JSON.stringify(users));
-  }
+  await setDoc(doc(db, COLLECTION, uid), { role }, { merge: true });
 };
