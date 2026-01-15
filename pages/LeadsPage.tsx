@@ -6,7 +6,7 @@ import LeadModal from '../components/LeadModal';
 import { STATUS_COLORS } from '../constants';
 import { createLead, updateLead, deleteLead } from '../services/leadService';
 import { extractLeadFromImage } from '../services/aiService';
-import { Plus, Search, Edit2, Trash2, Check, X, Sparkles, Loader2, MessageSquare, Camera, Clock, UserCheck, Phone, Mail, MapPin, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Check, X, Loader2, Camera, Clock, UserCheck, Phone, Mail, MapPin, ChevronDown, ChevronUp, MessageSquare } from 'lucide-react';
 
 interface LeadsPageProps {
   leads: Lead[];
@@ -17,11 +17,11 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [aiLoading, setAiLoading] = useState(false);
   const [expandedNeeds, setExpandedNeeds] = useState<Set<string>>(new Set());
   const aiFileInputRef = useRef<HTMLInputElement>(null);
 
+  // 切換展開/收合狀態
   const toggleNeed = (id: string) => {
     const newSet = new Set(expandedNeeds);
     if (newSet.has(id)) newSet.delete(id);
@@ -171,7 +171,7 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
             <input 
               type="text" 
-              placeholder="搜尋案主、需求關鍵字..." 
+              placeholder="搜尋案主名稱、需求內容..." 
               className="w-full pl-12 pr-4 py-3 bg-gray-50 border-transparent rounded-2xl text-sm font-medium focus:bg-white focus:ring-2 focus:ring-indigo-500 transition-all"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -208,9 +208,9 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
             <thead className="bg-gray-50/50">
               <tr>
                 <th className="px-6 py-6 text-left text-[11px] font-black text-slate-400 uppercase tracking-widest">客戶 / 來源</th>
-                <th className="px-6 py-6 text-left text-[11px] font-black text-slate-400 uppercase tracking-widest">需求內容 (點擊展開)</th>
+                <th className="px-6 py-6 text-left text-[11px] font-black text-slate-400 uppercase tracking-widest">需求內容 (點擊文字展開)</th>
                 <th className="px-6 py-6 text-left text-[11px] font-black text-slate-400 uppercase tracking-widest">聯絡資訊</th>
-                <th className="px-6 py-6 text-left text-[11px] font-black text-slate-400 uppercase tracking-widest">備註 / 內部評語</th>
+                <th className="px-6 py-6 text-left text-[11px] font-black text-slate-400 uppercase tracking-widest">備註與內部評語</th>
                 <th className="px-6 py-6 text-center text-[11px] font-black text-slate-400 uppercase tracking-widest">快速審核</th>
                 <th className="px-6 py-6 text-left text-[11px] font-black text-slate-400 uppercase tracking-widest">當前狀態</th>
                 <th className="px-6 py-6 text-right text-[11px] font-black text-slate-400 uppercase tracking-widest">操作</th>
@@ -230,55 +230,59 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-6 max-w-xs">
+                    <td className="px-6 py-6 max-w-sm">
                       <div 
                         onClick={() => toggleNeed(lead.id)}
                         className="cursor-pointer group/need relative"
                       >
-                        <p className={`text-sm text-slate-700 font-medium leading-relaxed ${isExpanded ? '' : 'line-clamp-2'}`}>
+                        <p className={`text-sm text-slate-700 font-medium leading-relaxed transition-all duration-300 ${isExpanded ? 'whitespace-pre-wrap' : 'line-clamp-2'}`}>
                           {lead.need}
                         </p>
-                        <div className="mt-1 flex items-center gap-1 text-[10px] font-black text-indigo-400 opacity-0 group-hover/need:opacity-100 transition-opacity">
-                          {isExpanded ? <><ChevronUp size={10}/> 收合</> : <><ChevronDown size={10}/> 點擊顯示全文</>}
+                        <div className="mt-2 flex items-center gap-1.5 text-[10px] font-black text-indigo-500 opacity-0 group-hover/need:opacity-100 transition-opacity">
+                          {isExpanded ? <><ChevronUp size={12}/> 點擊收合內容</> : <><ChevronDown size={12}/> 點擊展開全文</>}
                         </div>
-                        <span className="text-[10px] font-black text-emerald-600 mt-2 block">💰 預算：{lead.budget_text || '不詳'}</span>
+                        <span className="text-[10px] font-black text-emerald-600 mt-2 block bg-emerald-50 px-2 py-1 rounded inline-block">💰 預算：{lead.budget_text || '不詳'}</span>
                       </div>
                     </td>
                     <td className="px-6 py-6">
                       <div className="flex flex-col gap-2">
                         {lead.phone && (
-                          <div className="flex items-center gap-2 text-xs text-slate-600 font-bold">
-                            <Phone size={12} className="text-slate-400"/> {lead.phone}
+                          <div className="flex items-center gap-2 text-xs text-slate-600 font-bold bg-slate-50 p-1.5 rounded-lg border border-slate-100">
+                            <Phone size={12} className="text-indigo-400"/> {lead.phone}
                           </div>
                         )}
                         {lead.email && (
-                          <div className="flex items-center gap-2 text-xs text-slate-600 font-bold">
-                            <Mail size={12} className="text-slate-400"/> {lead.email}
+                          <div className="flex items-center gap-2 text-xs text-slate-600 font-bold bg-slate-50 p-1.5 rounded-lg border border-slate-100">
+                            <Mail size={12} className="text-indigo-400"/> {lead.email}
                           </div>
                         )}
                         {lead.location && (
-                          <div className="flex items-center gap-2 text-[10px] text-slate-500 font-medium">
-                            <MapPin size={12} className="text-indigo-400"/> {lead.location}
+                          <div className="flex items-center gap-2 text-[10px] text-slate-500 font-medium px-1.5">
+                            <MapPin size={12} className="text-slate-400"/> {lead.location}
                           </div>
                         )}
-                        {!lead.phone && !lead.email && !lead.location && <span className="text-xs text-slate-300 italic">無資訊</span>}
+                        {!lead.phone && !lead.email && !lead.location && <span className="text-xs text-slate-300 italic">無聯絡資訊</span>}
                       </div>
                     </td>
                     <td className="px-6 py-6">
-                      <div className="space-y-3 max-w-[200px]">
+                      <div className="space-y-3 max-w-[220px]">
                         {lead.note && (
-                          <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1">原始備註</p>
-                            <p className="text-xs text-slate-600 line-clamp-2">{lead.note}</p>
+                          <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 shadow-sm">
+                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1 flex items-center gap-1">
+                              <MessageSquare size={10}/> 原始備註
+                            </p>
+                            <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">{lead.note}</p>
                           </div>
                         )}
                         {lead.internal_remarks && (
-                          <div className="p-2 bg-indigo-50/50 rounded-lg border border-indigo-100">
-                            <p className="text-[10px] font-black text-indigo-400 uppercase tracking-tighter mb-1">內部評語 ({lead.remarks_author})</p>
+                          <div className="p-2.5 bg-indigo-50/50 rounded-xl border border-indigo-100 shadow-sm">
+                            <p className="text-[9px] font-black text-indigo-400 uppercase tracking-tighter mb-1 flex items-center gap-1">
+                              <UserCheck size={10}/> 內部評語 ({lead.remarks_author || '系統'})
+                            </p>
                             <p className="text-xs text-indigo-900 font-medium italic line-clamp-2">"{lead.internal_remarks}"</p>
                           </div>
                         )}
-                        {!lead.note && !lead.internal_remarks && <span className="text-xs text-slate-300 italic">無備註</span>}
+                        {!lead.note && !lead.internal_remarks && <span className="text-xs text-slate-300 italic">無任何備註</span>}
                       </div>
                     </td>
                     <td className="px-6 py-6 text-center">
@@ -303,7 +307,7 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
                           {lead.status}
                         </Badge>
                         {lead.decision_by && (
-                          <div className="flex items-center gap-1 text-[9px] text-slate-400 font-bold italic">
+                          <div className="flex items-center gap-1 text-[9px] text-slate-400 font-bold italic mt-1">
                             <UserCheck size={10} className="text-indigo-400" />
                             {lead.decision_by} 審核
                           </div>
@@ -321,6 +325,16 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
                   </tr>
                 );
               })}
+              {filteredLeads.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-6 py-24 text-center">
+                    <div className="flex flex-col items-center gap-3">
+                      <Search size={48} className="text-slate-200"/>
+                      <p className="text-slate-400 font-bold text-sm tracking-widest">找不到符合條件的案件</p>
+                    </div>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
