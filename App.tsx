@@ -1,7 +1,7 @@
 
-import React, { useState, useEffect } from 'react';
-import { onAuthStateChanged, User, signOut } from 'firebase/auth';
-import { auth } from './firebase';
+import React, { useState, useEffect } from 'react';  
+import { onAuthStateChanged, signOut, type User } from './firebase';  
+import { auth } from './firebase';  
 import { getUserProfile } from './services/userService';
 import { UserProfile, Role, Lead } from './types';
 import Sidebar from './components/Sidebar';
