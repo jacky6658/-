@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
-import { signInAnonymously } from 'firebase/auth';
-import { auth } from '../firebase';
+// 修復：從本地的 firebase.ts 導入 auth 與 signInAnonymously，確保與 Mock 後端一致
+import { auth, signInAnonymously } from '../firebase';
 import { createUserProfile } from '../services/userService';
 import { Role } from '../types';
 import { Fingerprint, User, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
@@ -20,7 +20,7 @@ const LoginPage: React.FC = () => {
     setError('');
 
     try {
-      // 1. 使用 Firebase 匿名登入獲取合法 Session
+      // 1. 使用本地 Mock 的 signInAnonymously 獲取合法 Session
       const userCredential = await signInAnonymously(auth);
       const uid = userCredential.user.uid;
       

@@ -1,10 +1,12 @@
 
-import { auth, db } from '../firebase';
+import { auth } from '../firebase';
 import { AuditLog, AuditAction } from '../types';
-import { collection, addDoc, query, where, orderBy, getDocs, limit } from 'firebase/firestore';
 import { getUserProfile } from './userService';
 
-const COLLECTION = 'audit_logs';
+const STORAGE_KEY = 'caseflow_audit_db';
+
+const getLogs = (): AuditLog[] => JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+const saveLogs = (logs: AuditLog[]) => localStorage.setItem(STORAGE_KEY, JSON.stringify(logs));
 
 export const logAction = async (
   lead_id: string, 
@@ -18,7 +20,8 @@ export const logAction = async (
   const profile = await getUserProfile(user.uid);
   const actor_name = profile?.displayName || 'Unknown';
 
-  const newLog = {
+  const newLog: AuditLog = {
+    id: 'log_' + Math.random().toString(36).substr(2, 9),
     lead_id,
     actor_uid: user.uid,
     actor_name,
@@ -28,20 +31,13 @@ export const logAction = async (
     created_at: new Date().toISOString()
   };
 
-  await addDoc(collection(db, COLLECTION), newLog);
+  const logs = getLogs();
+  logs.unshift(newLog);
+  saveLogs(logs.slice(0, 500)); // 只保留最後 500 筆
 };
 
 export const fetchLogs = async (leadId?: string) => {
-  let q = query(collection(db, COLLECTION), orderBy('created_at', 'desc'), limit(100));
-  
-  if (leadId) {
-    q = query(collection(db, COLLECTION), where('lead_id', '==', leadId), orderBy('created_at', 'desc'));
-  }
-
-  const querySnapshot = await getDocs(q);
-  const logs: AuditLog[] = [];
-  querySnapshot.forEach((doc) => {
-    logs.push({ id: doc.id, ...doc.data() } as AuditLog);
-  });
+  const logs = getLogs();
+  if (leadId) return logs.filter(l => l.lead_id === leadId);
   return logs;
 };
