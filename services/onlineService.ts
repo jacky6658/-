@@ -1,0 +1,128 @@
+import { UserProfile } from '../types';
+import { getAllUsers, updateUserProfile } from './userService';
+
+const ONLINE_USERS_KEY = 'caseflow_online_users';
+const HEARTBEAT_INTERVAL = 30000; // 30秒心跳
+
+// 更新用戶在線狀態
+export const updateOnlineStatus = async (uid: string, isOnline: boolean) => {
+  const now = new Date().toISOString();
+  await updateUserProfile(uid, {
+    isOnline,
+    lastSeen: isOnline ? undefined : now
+  });
+
+  // 更新在線用戶列表
+  const onlineUsers = getOnlineUsers();
+  if (isOnline) {
+    if (!onlineUsers.includes(uid)) {
+      onlineUsers.push(uid);
+    }
+  } else {
+    const index = onlineUsers.indexOf(uid);
+    if (index > -1) {
+      onlineUsers.splice(index, 1);
+    }
+  }
+  localStorage.setItem(ONLINE_USERS_KEY, JSON.stringify(onlineUsers));
+};
+
+// 獲取在線用戶列表
+export const getOnlineUsers = (): string[] => {
+  return JSON.parse(localStorage.getItem(ONLINE_USERS_KEY) || '[]');
+};
+
+// 獲取在線用戶資料
+export const getOnlineUserProfiles = async (): Promise<UserProfile[]> => {
+  const onlineUids = getOnlineUsers();
+  const allUsers = await getAllUsers();
+  const onlineUsers = allUsers.filter(user => {
+    // 檢查是否在在線列表中，或者用戶資料中標記為在線
+    return (onlineUids.includes(user.uid) || user.isOnline) && user.isActive !== false;
+  });
+  
+  // 確保所有在線用戶的資料都標記為在線
+  for (const user of onlineUsers) {
+    if (!user.isOnline) {
+      await updateUserProfile(user.uid, { isOnline: true });
+    }
+  }
+  
+  return onlineUsers;
+};
+
+// 設置用戶在線（登入時調用）
+export const setUserOnline = async (uid: string) => {
+  await updateOnlineStatus(uid, true);
+  
+  // 清除舊的心跳（如果存在）
+  const oldHeartbeat = localStorage.getItem(`heartbeat_${uid}`);
+  if (oldHeartbeat) {
+    try {
+      const data = JSON.parse(oldHeartbeat);
+      if (data.intervalId) {
+        clearInterval(data.intervalId);
+      }
+    } catch (e) {
+      // 忽略錯誤
+    }
+  }
+  
+  // 設置心跳，定期更新在線狀態
+  const intervalId = window.setInterval(() => {
+    updateOnlineStatus(uid, true).catch(console.error);
+  }, HEARTBEAT_INTERVAL);
+
+  // 保存心跳 ID，登出時清除
+  localStorage.setItem(`heartbeat_${uid}`, JSON.stringify({ intervalId }));
+  
+  // 頁面卸載時設置離線
+  const handleBeforeUnload = () => {
+    updateOnlineStatus(uid, false).catch(console.error);
+  };
+  window.addEventListener('beforeunload', handleBeforeUnload);
+};
+
+// 設置用戶離線（登出時調用）
+export const setUserOffline = async (uid: string) => {
+  // 清除心跳
+  const heartbeat = localStorage.getItem(`heartbeat_${uid}`);
+  if (heartbeat) {
+    try {
+      const data = JSON.parse(heartbeat);
+      if (data.intervalId) {
+        clearInterval(data.intervalId);
+      }
+    } catch (e) {
+      // 忽略錯誤
+    }
+    localStorage.removeItem(`heartbeat_${uid}`);
+  }
+  
+  await updateOnlineStatus(uid, false);
+};
+
+// 檢查並清理過期的在線狀態（超過1分鐘沒有心跳視為離線）
+export const cleanupOfflineUsers = async () => {
+  const onlineUids = getOnlineUsers();
+  const allUsers = await getAllUsers();
+  
+  for (const uid of onlineUids) {
+    const user = allUsers.find(u => u.uid === uid);
+    if (user && user.lastSeen) {
+      const lastSeen = new Date(user.lastSeen).getTime();
+      const now = Date.now();
+      // 如果超過2分鐘沒有更新，視為離線
+      if (now - lastSeen > 120000) {
+        await updateOnlineStatus(uid, false);
+      }
+    }
+  }
+};
+
+// 定期清理（每分鐘執行一次）
+if (typeof window !== 'undefined') {
+  setInterval(() => {
+    cleanupOfflineUsers().catch(console.error);
+  }, 60000);
+}

@@ -27,15 +27,19 @@ export const onAuthStateChanged = (authObj: any, callback: (user: User | null) =
   };
 };
 
-export const signInAnonymously = async (authObj: any) => {
-  // 不需要任何 Key，直接隨機生成 UID
+export const signInAnonymously = async (authObj: any, customUid?: string) => {
+  // 如果提供了自定義 UID，使用它；否則生成隨機 UID
+  const uid = customUid || ('user-' + Math.random().toString(36).substring(2, 9));
   const mockUser: User = { 
-    uid: 'user-' + Math.random().toString(36).substring(2, 9), 
+    uid: uid, 
     isAnonymous: true 
   };
   currentUser = mockUser;
   localStorage.setItem('caseflow_user', JSON.stringify(mockUser));
-  authListeners.forEach(cb => cb(mockUser));
+  // 使用 setTimeout 確保狀態更新在下一幀執行
+  setTimeout(() => {
+    authListeners.forEach(cb => cb(mockUser));
+  }, 0);
   return { user: mockUser };
 };
 

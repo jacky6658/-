@@ -48,6 +48,13 @@ export interface UserProfile {
   email: string;
   role: Role;
   displayName: string;
+  password?: string; // 密碼（可選，用於內部員工）
+  isActive?: boolean; // 是否啟用
+  createdAt?: string; // 創建時間
+  avatar?: string; // 大頭照（Base64 或 URL）
+  status?: string; // 個人狀態（例如：在線、忙碌、離開等）
+  isOnline?: boolean; // 是否在線
+  lastSeen?: string; // 最後上線時間
 }
 
 export interface Lead {
