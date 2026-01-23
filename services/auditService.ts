@@ -2,9 +2,11 @@
 import { auth } from '../mockBackend';
 import { AuditLog, AuditAction } from '../types';
 import { getUserProfile } from './userService';
+import { apiRequest, useApiMode } from './apiConfig';
 
 const STORAGE_KEY = 'caseflow_audit_db';
 
+// localStorage 操作（降級方案）
 const getLogs = (): AuditLog[] => JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
 const saveLogs = (logs: AuditLog[]) => localStorage.setItem(STORAGE_KEY, JSON.stringify(logs));
 
@@ -37,6 +39,18 @@ export const logAction = async (
 };
 
 export const fetchLogs = async (leadId?: string) => {
+  // 如果使用 API 模式
+  if (useApiMode()) {
+    try {
+      const endpoint = leadId ? `/api/audit-logs?leadId=${leadId}` : '/api/audit-logs';
+      return await apiRequest(endpoint);
+    } catch (error) {
+      console.error('API 獲取審計日誌失敗，降級到 localStorage:', error);
+      // 降級到 localStorage
+    }
+  }
+
+  // localStorage 模式（降級方案）
   const logs = getLogs();
   if (leadId) return logs.filter(l => l.lead_id === leadId);
   return logs;

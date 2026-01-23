@@ -1,12 +1,25 @@
 
 import { UserProfile, Role } from '../types';
+import { apiRequest, useApiMode } from './apiConfig';
 
 const STORAGE_KEY = 'caseflow_users_db';
 const PROFILE_KEY = 'caseflow_profile';
 const INITIALIZED_KEY = 'caseflow_users_initialized';
 
+// localStorage 操作（降級方案）
 const getDb = (): Record<string, UserProfile> => JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
 const saveDb = (db: Record<string, UserProfile>) => localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+
+// API 模式：從後端獲取使用者
+const fetchUsersFromApi = async (): Promise<Record<string, UserProfile>> => {
+  try {
+    const users = await apiRequest('/api/users');
+    return users;
+  } catch (error) {
+    console.error('從 API 獲取使用者失敗，降級到 localStorage:', error);
+    return getDb(); // 降級到 localStorage
+  }
+};
 
 // 初始化預設用戶
 const initializeDefaultUsers = () => {
@@ -71,6 +84,18 @@ if (typeof window !== 'undefined') {
 }
 
 export const getUserProfile = async (uid: string): Promise<UserProfile | null> => {
+  // 如果使用 API 模式
+  if (useApiMode()) {
+    try {
+      const user = await apiRequest(`/api/users/${uid}`);
+      return user;
+    } catch (error) {
+      console.error('API 獲取使用者失敗，降級到 localStorage:', error);
+      // 降級到 localStorage
+    }
+  }
+
+  // localStorage 模式（降級方案）
   const db = getDb();
   return db[uid] || JSON.parse(localStorage.getItem(PROFILE_KEY) || 'null');
 };
@@ -84,6 +109,18 @@ export const getUserByDisplayName = async (displayName: string): Promise<UserPro
 };
 
 export const getAllUsers = async (): Promise<UserProfile[]> => {
+  // 如果使用 API 模式
+  if (useApiMode()) {
+    try {
+      const users = await fetchUsersFromApi();
+      return Object.values(users).filter(u => u.isActive !== false);
+    } catch (error) {
+      console.error('API 獲取使用者失敗，降級到 localStorage:', error);
+      // 降級到 localStorage
+    }
+  }
+
+  // localStorage 模式（降級方案）
   const db = getDb();
   const users = Object.values(db).filter(u => u.isActive !== false);
   
