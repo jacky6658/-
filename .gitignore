@@ -17,6 +17,10 @@ dist-ssr
 .env.local
 .env.*.local
 
+# Scripts with sensitive information
+scripts/connect-postgres.sh
+scripts/execute-sql.sh
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
