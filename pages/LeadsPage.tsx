@@ -19,7 +19,19 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
   const [search, setSearch] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [expandedNeeds, setExpandedNeeds] = useState<Set<string>>(new Set());
+  const [isScrolledToEnd, setIsScrolledToEnd] = useState(false);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
   const aiFileInputRef = useRef<HTMLInputElement>(null);
+
+  // 當leads更新時，同步更新selectedLead
+  useEffect(() => {
+    if (selectedLead?.id) {
+      const updatedLead = leads.find(l => l.id === selectedLead.id);
+      if (updatedLead) {
+        setSelectedLead(updatedLead);
+      }
+    }
+  }, [leads, selectedLead?.id]);
 
   // 切換展開/收合狀態
   const toggleNeed = (id: string) => {
@@ -53,7 +65,7 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
 
   useEffect(() => {
     const handlePaste = async (e: ClipboardEvent) => {
-      if (userProfile.role !== Role.ADMIN) return;
+      // 所有用戶都可以使用剪貼簿貼圖功能
       const items = e.clipboardData?.items;
       if (!items) return;
       for (let i = 0; i < items.length; i++) {
@@ -65,7 +77,23 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
     };
     window.addEventListener('paste', handlePaste);
     return () => window.removeEventListener('paste', handlePaste);
-  }, [userProfile.role]);
+  }, []);
+
+  // 檢測表格滑動狀態
+  useEffect(() => {
+    const scrollContainer = tableScrollRef.current;
+    if (!scrollContainer) return;
+
+    const checkScroll = () => {
+      const { scrollLeft, scrollWidth, clientWidth } = scrollContainer;
+      setIsScrolledToEnd(scrollLeft + clientWidth >= scrollWidth - 10);
+    };
+
+    scrollContainer.addEventListener('scroll', checkScroll);
+    checkScroll(); // 初始檢查
+
+    return () => scrollContainer.removeEventListener('scroll', checkScroll);
+  }, [leads]);
 
   const processAiFile = async (file: File) => {
     if (!file) return;
@@ -110,8 +138,13 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
     if (!selectedLead?.id) return;
     try {
       await updateLead(selectedLead.id, data);
-      setIsModalOpen(false);
-      setSelectedLead(null);
+      // 等待一下讓數據更新，然後從leads中重新獲取
+      setTimeout(() => {
+        const updatedLead = leads.find(l => l.id === selectedLead.id);
+        if (updatedLead) {
+          setSelectedLead(updatedLead);
+        }
+      }, 100);
     } catch (err) {
       alert('更新失敗');
     }
@@ -180,40 +213,42 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
         </div>
         
         <div className="flex items-center gap-3">
-          {userProfile.role === Role.ADMIN && (
-            <>
-              <button 
-                onClick={() => aiFileInputRef.current?.click()}
-                className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl text-sm font-black hover:bg-indigo-700 transition-all shadow-lg active:scale-95"
-              >
-                <Camera size={18} />
-                AI 傳圖識別
-              </button>
-              <input type="file" ref={aiFileInputRef} className="hidden" accept="image/*" onChange={(e) => e.target.files?.[0] && processAiFile(e.target.files[0])} />
-              
-              <button 
-                onClick={() => { setSelectedLead(null); setIsModalOpen(true); }}
-                className="p-3 bg-slate-900 text-white rounded-2xl hover:bg-black transition-all"
-              >
-                <Plus size={20} />
-              </button>
-            </>
-          )}
+          <button 
+            onClick={() => aiFileInputRef.current?.click()}
+            className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl text-sm font-black hover:bg-indigo-700 transition-all shadow-lg active:scale-95"
+          >
+            <Camera size={18} />
+            AI 傳圖識別
+          </button>
+          <input type="file" ref={aiFileInputRef} className="hidden" accept="image/*" onChange={(e) => e.target.files?.[0] && processAiFile(e.target.files[0])} />
+          
+          <button 
+            onClick={() => { setSelectedLead(null); setIsModalOpen(true); }}
+            className="flex items-center gap-2 bg-emerald-600 text-white px-6 py-3 rounded-2xl text-sm font-black hover:bg-emerald-700 transition-all shadow-lg active:scale-95"
+            title="手動新增案件"
+          >
+            <Plus size={18} />
+            新增案件
+          </button>
         </div>
       </div>
 
-      <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-100">
-            <thead className="bg-gray-50/50">
+      <div className="bg-white rounded-2xl sm:rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
+        <div 
+          ref={tableScrollRef}
+          className={`table-scroll-container relative overflow-x-auto overscroll-x-contain scrollbar-thin ${isScrolledToEnd ? 'scrolled-to-end' : ''}`}
+          style={{ WebkitOverflowScrolling: 'touch' }}
+        >
+          <table className="min-w-[900px] sm:min-w-full divide-y divide-gray-100">
+            <thead className="bg-gray-50/50 sticky top-0 z-10">
               <tr>
-                <th className="px-6 py-6 text-left text-[11px] font-black text-slate-400 uppercase tracking-widest">客戶 / 來源</th>
-                <th className="px-6 py-6 text-left text-[11px] font-black text-slate-400 uppercase tracking-widest">需求內容 (點擊文字展開)</th>
-                <th className="px-6 py-6 text-left text-[11px] font-black text-slate-400 uppercase tracking-widest">聯絡資訊</th>
-                <th className="px-6 py-6 text-left text-[11px] font-black text-slate-400 uppercase tracking-widest">備註與內部評語</th>
-                <th className="px-6 py-6 text-center text-[11px] font-black text-slate-400 uppercase tracking-widest">快速審核</th>
-                <th className="px-6 py-6 text-left text-[11px] font-black text-slate-400 uppercase tracking-widest">當前狀態</th>
-                <th className="px-6 py-6 text-right text-[11px] font-black text-slate-400 uppercase tracking-widest">操作</th>
+                <th className="px-4 sm:px-6 py-4 sm:py-6 text-left text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">客戶 / 來源</th>
+                <th className="px-4 sm:px-6 py-4 sm:py-6 text-left text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-widest min-w-[200px]">需求內容 (點擊文字展開)</th>
+                <th className="px-4 sm:px-6 py-4 sm:py-6 text-left text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">聯絡資訊</th>
+                <th className="px-4 sm:px-6 py-4 sm:py-6 text-left text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-widest min-w-[180px]">備註與內部評語</th>
+                <th className="px-4 sm:px-6 py-4 sm:py-6 text-center text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">快速審核</th>
+                <th className="px-4 sm:px-6 py-4 sm:py-6 text-left text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">當前狀態</th>
+                <th className="px-4 sm:px-6 py-4 sm:py-6 text-right text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">操作</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-100">
@@ -221,7 +256,7 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
                 const isExpanded = expandedNeeds.has(lead.id);
                 return (
                   <tr key={lead.id} className="hover:bg-slate-50/50 transition-all group align-top">
-                    <td className="px-6 py-6">
+                    <td className="px-4 sm:px-6 py-4 sm:py-6 whitespace-nowrap">
                       <div className="flex flex-col gap-1">
                         <span className="text-xs font-black text-indigo-600">{lead.platform}</span>
                         <span className="text-sm font-bold text-slate-900">{lead.platform_id}</span>
@@ -230,7 +265,7 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-6 max-w-sm">
+                    <td className="px-4 sm:px-6 py-4 sm:py-6 max-w-[200px] sm:max-w-sm">
                       <div 
                         onClick={() => toggleNeed(lead.id)}
                         className="cursor-pointer group/need relative"
@@ -244,7 +279,7 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
                         <span className="text-[10px] font-black text-emerald-600 mt-2 block bg-emerald-50 px-2 py-1 rounded inline-block">💰 預算：{lead.budget_text || '不詳'}</span>
                       </div>
                     </td>
-                    <td className="px-6 py-6">
+                    <td className="px-4 sm:px-6 py-4 sm:py-6 whitespace-nowrap">
                       <div className="flex flex-col gap-2">
                         {lead.phone && (
                           <div className="flex items-center gap-2 text-xs text-slate-600 font-bold bg-slate-50 p-1.5 rounded-lg border border-slate-100">
@@ -264,8 +299,8 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
                         {!lead.phone && !lead.email && !lead.location && <span className="text-xs text-slate-300 italic">無聯絡資訊</span>}
                       </div>
                     </td>
-                    <td className="px-6 py-6">
-                      <div className="space-y-3 max-w-[220px]">
+                    <td className="px-4 sm:px-6 py-4 sm:py-6">
+                      <div className="space-y-3 max-w-[180px] sm:max-w-[220px]">
                         {lead.note && (
                           <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 shadow-sm">
                             <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1 flex items-center gap-1">
@@ -285,7 +320,7 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
                         {!lead.note && !lead.internal_remarks && <span className="text-xs text-slate-300 italic">無任何備註</span>}
                       </div>
                     </td>
-                    <td className="px-6 py-6 text-center">
+                    <td className="px-4 sm:px-6 py-4 sm:py-6 text-center whitespace-nowrap">
                       <div className="flex items-center justify-center gap-2">
                         <button 
                           onClick={() => handleQuickDecision(lead, Decision.ACCEPT)}
@@ -301,7 +336,7 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
                         </button>
                       </div>
                     </td>
-                    <td className="px-6 py-6">
+                    <td className="px-4 sm:px-6 py-4 sm:py-6 whitespace-nowrap">
                       <div className="flex flex-col gap-1">
                         <Badge className={`${STATUS_COLORS[lead.status]} font-black px-3 py-1 text-[9px] uppercase tracking-wider rounded-lg border border-current`}>
                           {lead.status}
@@ -314,7 +349,7 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
                         )}
                       </div>
                     </td>
-                    <td className="px-6 py-6 text-right">
+                    <td className="px-4 sm:px-6 py-4 sm:py-6 text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
                         <button onClick={() => { setSelectedLead(lead); setIsModalOpen(true); }} className="p-2 bg-slate-100 text-slate-500 hover:bg-slate-900 hover:text-white rounded-xl transition-all"><Edit2 size={16}/></button>
                         {userProfile.role === Role.ADMIN && (
@@ -344,7 +379,7 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
         isOpen={isModalOpen}
         onClose={() => { setIsModalOpen(false); setSelectedLead(null); }}
         onSubmit={selectedLead && selectedLead.id ? handleUpdate : handleCreate}
-        initialData={selectedLead}
+        initialData={selectedLead?.id ? leads.find(l => l.id === selectedLead.id) || selectedLead : selectedLead}
         userRole={userProfile.role}
         userName={userProfile.displayName}
       />

@@ -3,7 +3,23 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { Platform, Lead } from "../types";
 
 // 每次調用時確保獲取最新的 API Key
-const getAiClient = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Vite 使用 import.meta.env 來讀取環境變數
+// 支援多種環境變數名稱：VITE_API_KEY, GEMINI_API_KEY, GOOGLE_API_KEY
+const getAiClient = () => {
+  const apiKey = 
+    import.meta.env.VITE_API_KEY || 
+    import.meta.env.GEMINI_API_KEY || 
+    import.meta.env.GOOGLE_API_KEY ||
+    (typeof process !== 'undefined' && process.env?.API_KEY) ||
+    (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) ||
+    (typeof process !== 'undefined' && process.env?.GOOGLE_API_KEY);
+  
+  if (!apiKey) {
+    throw new Error('請設置 API Key。請在 .env 文件中設置 VITE_API_KEY 或 GEMINI_API_KEY');
+  }
+  
+  return new GoogleGenAI({ apiKey });
+};
 
 export const extractLeadFromImage = async (base64Data: string): Promise<Partial<Lead>> => {
   const ai = getAiClient();
@@ -61,8 +77,19 @@ export const extractLeadFromImage = async (base64Data: string): Promise<Partial<
     
     const result = JSON.parse(textOutput.trim());
     return result;
-  } catch (e) {
+  } catch (e: any) {
     console.error("AI Service Error:", e);
+    
+    // 檢查是否為 API Key 相關錯誤
+    if (e?.message?.includes('API Key') || e?.message?.includes('apiKey') || e?.message?.includes('401') || e?.message?.includes('403')) {
+      throw new Error("API Key 未設置或無效。請在 .env 文件中設置 VITE_API_KEY。獲取 API Key: https://aistudio.google.com/app/apikey");
+    }
+    
+    // 檢查是否為網路錯誤
+    if (e?.message?.includes('fetch') || e?.message?.includes('network') || e?.message?.includes('NetworkError')) {
+      throw new Error("網路連線失敗，請檢查您的網路連線");
+    }
+    
     throw new Error("AI 識別失敗，請確認網路與圖片品質");
   }
 };

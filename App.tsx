@@ -12,6 +12,7 @@ import KanbanPage from './pages/KanbanPage';
 import AuditLogsPage from './pages/AuditLogsPage';
 import MembersPage from './pages/MembersPage';
 import ImportPage from './pages/ImportPage';
+import MigrationPage from './pages/MigrationPage';
 import LoginPage from './pages/LoginPage';
 import { subscribeToLeads } from './services/leadService';
 import { Menu, X as XIcon } from 'lucide-react';
@@ -124,6 +125,7 @@ const App: React.FC = () => {
       case 'audit': return <AuditLogsPage leads={leads} userProfile={profile} />;
       case 'members': return <MembersPage userProfile={profile} />;
       case 'import': return <ImportPage userProfile={profile} />;
+      case 'migration': return <MigrationPage userProfile={profile} />;
       default: return <LeadsPage leads={leads} userProfile={profile} />;
     }
   };
@@ -156,7 +158,9 @@ const App: React.FC = () => {
                    activeTab === 'review' ? '待我審核' :
                    activeTab === 'kanban' ? '流程看板' :
                    activeTab === 'audit' ? '操作紀錄' :
-                   activeTab === 'members' ? '成員管理' : '匯入案件'}
+                   activeTab === 'members' ? '成員管理' : 
+                   activeTab === 'import' ? '匯入案件' :
+                   activeTab === 'migration' ? '資料遷移' : '案件總表'}
                 </h1>
                 <p className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] sm:tracking-[0.2em] mt-0.5 hidden sm:block">Collaborative Workspace</p>
               </div>

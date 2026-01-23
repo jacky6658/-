@@ -4,6 +4,49 @@
 
 ---
 
+## 🚀 快速開始 (Quick Start)
+
+### 1. 安裝依賴
+```bash
+npm install
+```
+
+### 2. 設置 AI 傳圖識別功能（可選）
+
+AI 傳圖識別功能需要 Google Gemini API Key。設置步驟：
+
+1. **獲取 API Key**
+   - 前往 [Google AI Studio](https://aistudio.google.com/app/apikey)
+   - 登入您的 Google 帳號
+   - 點擊「Create API Key」創建新的 API Key
+
+2. **設置環境變數**
+   - 在專案根目錄創建 `.env` 文件
+   - 添加以下內容：
+   ```env
+   VITE_API_KEY=your-api-key-here
+   ```
+   - 將 `your-api-key-here` 替換為您獲取的 API Key
+
+3. **重啟開發伺服器**
+   ```bash
+   npm run dev
+   ```
+
+**注意**：
+- `.env` 文件已加入 `.gitignore`，不會被提交到版本控制
+- 如果沒有設置 API Key，AI 傳圖識別功能將無法使用，但其他功能正常運作
+- 您也可以使用 `GEMINI_API_KEY` 或 `GOOGLE_API_KEY` 作為環境變數名稱
+
+### 3. 啟動開發伺服器
+```bash
+npm run dev
+```
+
+應用程式將在 `http://localhost:3000` 啟動。
+
+---
+
 ## 🏗️ 1. 專案架構 (Project Structure)
 
 專案採用「層次化架構 (Layered Architecture)」，確保邏輯與渲染完全分離：

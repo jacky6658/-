@@ -15,7 +15,9 @@ export default defineConfig({
   plugins: [react()],
   define: {
     // 移除會抹除 process.env 的定義，讓系統能正確抓到注入的 API_KEY
-    'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development')
+    'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
+    // 將環境變數暴露給客戶端（僅以 VITE_ 開頭的變數會被暴露）
+    'process.env': JSON.stringify(process.env)
   },
   resolve: {
     alias: {

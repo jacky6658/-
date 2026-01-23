@@ -88,7 +88,11 @@ export interface Lead {
   created_by_name: string;
   created_at: string;
   updated_at: string;
-  last_action_by?: string; 
+  last_action_by?: string;
+  
+  // 進度更新和歷史記錄
+  progress_updates?: ProgressUpdate[]; // 近期進度更新
+  change_history?: ChangeHistory[]; // 修改歷史記錄
 }
 
 export enum AuditAction {
@@ -106,5 +110,27 @@ export interface AuditLog {
   action: AuditAction;
   before?: any;
   after?: any;
+  created_at: string;
+}
+
+// 進度更新記錄
+export interface ProgressUpdate {
+  id: string;
+  lead_id: string;
+  content: string; // 進度內容
+  author_uid: string;
+  author_name: string;
+  created_at: string;
+}
+
+// 修改歷史記錄
+export interface ChangeHistory {
+  id: string;
+  lead_id: string;
+  field: string; // 修改的欄位名稱
+  old_value?: any;
+  new_value?: any;
+  author_uid: string;
+  author_name: string;
   created_at: string;
 }
