@@ -151,11 +151,20 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('確定要刪除此案件嗎？')) {
+    const lead = leads.find(l => l.id === id);
+    const leadInfo = lead ? `${lead.platform_id || '未命名案件'} (${lead.status})` : '此案件';
+    
+    if (window.confirm(`確定要刪除「${leadInfo}」嗎？\n\n此操作無法復原，請確認後再執行。`)) {
       try {
         await deleteLead(id);
+        // 如果正在編輯此案件，關閉編輯視窗
+        if (selectedLead?.id === id) {
+          setIsModalOpen(false);
+          setSelectedLead(null);
+        }
       } catch (err) {
-        alert('刪除失敗');
+        console.error('刪除失敗:', err);
+        alert('刪除失敗，請稍後再試');
       }
     }
   };
@@ -350,11 +359,21 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
                       </div>
                     </td>
                     <td className="px-4 sm:px-6 py-4 sm:py-6 text-right whitespace-nowrap">
-                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                        <button onClick={() => { setSelectedLead(lead); setIsModalOpen(true); }} className="p-2 bg-slate-100 text-slate-500 hover:bg-slate-900 hover:text-white rounded-xl transition-all"><Edit2 size={16}/></button>
-                        {userProfile.role === Role.ADMIN && (
-                          <button onClick={() => handleDelete(lead.id)} className="p-2 bg-slate-100 text-slate-500 hover:bg-red-600 hover:text-white rounded-xl transition-all"><Trash2 size={16}/></button>
-                        )}
+                      <div className="flex items-center justify-end gap-2">
+                        <button 
+                          onClick={() => { setSelectedLead(lead); setIsModalOpen(true); }} 
+                          className="p-2 bg-slate-100 text-slate-500 hover:bg-slate-900 hover:text-white rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                          title="編輯案件"
+                        >
+                          <Edit2 size={16}/>
+                        </button>
+                        <button 
+                          onClick={() => handleDelete(lead.id)} 
+                          className="p-2 bg-slate-100 text-red-500 hover:bg-red-600 hover:text-white rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                          title="刪除案件"
+                        >
+                          <Trash2 size={16}/>
+                        </button>
                       </div>
                     </td>
                   </tr>

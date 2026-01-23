@@ -113,7 +113,22 @@ export const getAllUsers = async (): Promise<UserProfile[]> => {
   if (useApiMode()) {
     try {
       const users = await fetchUsersFromApi();
-      return Object.values(users).filter(u => u.isActive !== false);
+      const userList = Object.values(users).filter(u => u.isActive !== false);
+      
+      // 如果 API 返回空陣列，降級到 localStorage（可能是資料庫還沒有用戶資料）
+      if (userList.length === 0) {
+        console.warn('API 返回空用戶列表，降級到 localStorage');
+        const db = getDb();
+        const localUsers = Object.values(db).filter(u => u.isActive !== false);
+        // 如果 localStorage 也沒有用戶，確保初始化預設用戶
+        if (localUsers.length === 0) {
+          initializeDefaultUsers();
+          return Object.values(getDb()).filter(u => u.isActive !== false);
+        }
+        return localUsers;
+      }
+      
+      return userList;
     } catch (error) {
       console.error('API 獲取使用者失敗，降級到 localStorage:', error);
       // 降級到 localStorage
@@ -123,6 +138,12 @@ export const getAllUsers = async (): Promise<UserProfile[]> => {
   // localStorage 模式（降級方案）
   const db = getDb();
   const users = Object.values(db).filter(u => u.isActive !== false);
+  
+  // 如果 localStorage 也沒有用戶，確保初始化預設用戶
+  if (users.length === 0) {
+    initializeDefaultUsers();
+    return Object.values(getDb()).filter(u => u.isActive !== false);
+  }
   
   // 去重：如果有多個相同 displayName 的用戶，只保留第一個（根據 uid 排序）
   const seen = new Map<string, UserProfile>();

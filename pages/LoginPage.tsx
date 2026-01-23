@@ -15,8 +15,17 @@ const LoginPage: React.FC = () => {
   }, []);
 
   const loadUsers = async () => {
-    const allUsers = await getAllUsers();
-    setUsers(allUsers);
+    try {
+      const allUsers = await getAllUsers();
+      // 確保至少有預設用戶
+      if (allUsers.length === 0) {
+        console.warn('未找到任何用戶，請檢查資料庫或 localStorage');
+      }
+      setUsers(allUsers);
+    } catch (error) {
+      console.error('載入用戶失敗:', error);
+      setError('載入用戶資料失敗，請重新整理頁面');
+    }
   };
 
   const handleCardClick = async (user: UserProfile) => {
