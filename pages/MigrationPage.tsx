@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Database, Download, Upload, CheckCircle, AlertCircle } from 'lucide-react';
+import { Database, Download, Upload, CheckCircle, AlertCircle, Zap } from 'lucide-react';
+import { apiRequest, useApiMode } from '../services/apiConfig';
 
 interface MigrationPageProps {
   userProfile: any;
@@ -180,6 +181,58 @@ const MigrationPage: React.FC<MigrationPageProps> = ({ userProfile }) => {
     setTimeout(() => setMessage(''), 2000);
   };
 
+  // 自動匯入到資料庫
+  const handleAutoMigrate = async () => {
+    if (!useApiMode()) {
+      setStatus('error');
+      setMessage('❌ 自動匯入需要設置 VITE_API_URL 環境變數！請在 Zeabur 前端服務中設置環境變數後重新部署。');
+      return;
+    }
+
+    setStatus('generating');
+    setMessage('正在讀取本地資料...');
+
+    try {
+      const { leads, users, auditLogs } = getLocalStorageData();
+      
+      const stats = {
+        users: Object.keys(users).length,
+        leads: leads.length,
+        auditLogs: auditLogs.length,
+      };
+
+      if (stats.users === 0 && stats.leads === 0 && stats.auditLogs === 0) {
+        setStatus('error');
+        setMessage('❌ 本地沒有資料可遷移！');
+        return;
+      }
+
+      setMessage(`正在匯入 ${stats.users} 個使用者、${stats.leads} 筆案件、${stats.auditLogs} 筆審計日誌...`);
+
+      const result = await apiRequest('/api/migrate', {
+        method: 'POST',
+        body: JSON.stringify({ users, leads, auditLogs }),
+      });
+
+      if (result.success) {
+        setStatus('success');
+        setMessage(`✅ ${result.message}`);
+        
+        // 3 秒後自動重新載入頁面以顯示新資料
+        setTimeout(() => {
+          window.location.reload();
+        }, 3000);
+      } else {
+        setStatus('error');
+        setMessage(`❌ 匯入失敗：${result.error || '未知錯誤'}`);
+      }
+    } catch (error: any) {
+      setStatus('error');
+      setMessage(`❌ 匯入失敗：${error.message || '請檢查後端連接和資料庫狀態'}`);
+      console.error('自動匯入失敗:', error);
+    }
+  };
+
   return (
     <div className="p-8 max-w-6xl mx-auto">
       <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 p-8">
@@ -196,10 +249,29 @@ const MigrationPage: React.FC<MigrationPageProps> = ({ userProfile }) => {
         </div>
 
         {/* 說明 */}
+        <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-6 mb-8">
+          <h3 className="font-black text-green-900 mb-3 flex items-center gap-2">
+            <Zap size={18} />
+            快速自動匯入（推薦）
+          </h3>
+          <p className="text-sm text-green-800 mb-4">
+            點擊「⚡ 一鍵自動匯入」按鈕，系統會自動將本地資料匯入到雲端資料庫，無需手動執行 SQL！
+          </p>
+          <div className="bg-white rounded-xl p-4 border border-green-200">
+            <p className="text-xs text-green-700 font-bold mb-2">📋 使用條件：</p>
+            <ul className="list-disc list-inside space-y-1 text-xs text-green-800">
+              <li>已設置 <code className="bg-green-100 px-1 rounded">VITE_API_URL</code> 環境變數</li>
+              <li>後端服務已正常運行並連接到資料庫</li>
+              <li>資料表已建立（如果沒有，請先執行下方的建表語句）</li>
+            </ul>
+          </div>
+        </div>
+
+        {/* 手動匯入說明 */}
         <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6 mb-8">
           <h3 className="font-black text-blue-900 mb-3 flex items-center gap-2">
             <AlertCircle size={18} />
-            使用說明
+            手動匯入方式（備用）
           </h3>
           <ol className="list-decimal list-inside space-y-2 text-sm text-blue-800">
             <li>首先在您的 PostgreSQL 資料庫執行建表語句（見下方）</li>
@@ -210,7 +282,17 @@ const MigrationPage: React.FC<MigrationPageProps> = ({ userProfile }) => {
         </div>
 
         {/* 操作按鈕 */}
-        <div className="flex gap-4 mb-6">
+        <div className="flex flex-wrap gap-4 mb-6">
+          {/* 自動匯入按鈕（優先顯示） */}
+          <button
+            onClick={handleAutoMigrate}
+            disabled={status === 'generating'}
+            className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-black hover:from-green-700 hover:to-emerald-700 transition-all disabled:opacity-50 flex items-center gap-2 shadow-lg"
+          >
+            <Zap size={18} />
+            {status === 'generating' ? '匯入中...' : '⚡ 一鍵自動匯入'}
+          </button>
+
           <button
             onClick={handleGenerateSQL}
             disabled={status === 'generating'}

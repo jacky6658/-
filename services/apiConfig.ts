@@ -43,18 +43,36 @@ export const apiRequest = async (
 
   const url = `${apiUrl}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
   
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
+  console.log(`🌐 API 請求: ${options.method || 'GET'} ${url}`);
+  
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    });
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: response.statusText }));
-    throw new Error(error.error || `HTTP ${response.status}: ${response.statusText}`);
+    console.log(`📡 API 響應狀態: ${response.status} ${response.statusText}`);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch {
+        errorData = { error: errorText || response.statusText };
+      }
+      console.error(`❌ API 請求失敗:`, errorData);
+      throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    console.log(`✅ API 請求成功，返回資料類型:`, Array.isArray(data) ? `陣列 (${data.length} 項)` : typeof data);
+    return data;
+  } catch (error) {
+    console.error(`❌ API 請求異常:`, error);
+    throw error;
   }
-
-  return response.json();
 };
