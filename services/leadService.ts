@@ -17,10 +17,14 @@ const saveLeads = (leads: Lead[]) => {
 // API 模式：從後端獲取資料
 const fetchLeadsFromApi = async (): Promise<Lead[]> => {
   try {
-    return await apiRequest('/api/leads');
+    const leads = await apiRequest('/api/leads');
+    console.log('✅ 從 API 獲取案件成功，共', leads?.length || 0, '筆');
+    return leads || [];
   } catch (error) {
-    console.error('從 API 獲取案件失敗，降級到 localStorage:', error);
-    return getLeads(); // 降級到 localStorage
+    console.error('❌ 從 API 獲取案件失敗，降級到 localStorage:', error);
+    const localLeads = getLeads();
+    console.log('📦 localStorage 中有', localLeads.length, '筆案件');
+    return localLeads; // 降級到 localStorage
   }
 };
 
@@ -251,15 +255,21 @@ export const deleteLead = async (id: string) => {
 };
 
 export const subscribeToLeads = (callback: (leads: Lead[]) => void) => {
+  const apiUrl = getApiUrl();
+  console.log('📡 載入案件資料模式:', apiUrl ? `API 模式 (${apiUrl})` : 'localStorage 模式');
+  
   // 如果使用 API 模式，定期輪詢
   if (useApiMode()) {
     const fetchData = async () => {
       try {
         const leads = await fetchLeadsFromApi();
+        console.log('📊 更新案件列表，共', leads.length, '筆');
         callback(leads);
       } catch (error) {
-        console.error('獲取資料失敗:', error);
-        callback(getLeads()); // 降級到 localStorage
+        console.error('❌ 獲取資料失敗:', error);
+        const localLeads = getLeads();
+        console.log('📦 降級到 localStorage，共', localLeads.length, '筆');
+        callback(localLeads); // 降級到 localStorage
       }
     };
 
@@ -273,7 +283,11 @@ export const subscribeToLeads = (callback: (leads: Lead[]) => void) => {
   }
 
   // localStorage 模式
-  const handler = () => callback(getLeads());
+  const handler = () => {
+    const leads = getLeads();
+    console.log('📦 localStorage 模式：更新案件列表，共', leads.length, '筆');
+    callback(leads);
+  };
   window.addEventListener('leads_updated', handler);
   handler();
   return () => window.removeEventListener('leads_updated', handler);

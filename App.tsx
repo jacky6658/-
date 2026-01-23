@@ -84,8 +84,14 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (user) {
-      const unsubLeads = subscribeToLeads(setLeads);
+      console.log('👤 用戶已登入，開始載入案件資料...');
+      const unsubLeads = subscribeToLeads((loadedLeads) => {
+        console.log('📋 案件資料已更新，共', loadedLeads.length, '筆');
+        setLeads(loadedLeads);
+      });
       return () => unsubLeads();
+    } else {
+      setLeads([]);
     }
   }, [user]);
 

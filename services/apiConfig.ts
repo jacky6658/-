@@ -16,9 +16,19 @@ export const getApiUrl = (): string | null => {
   return null;
 };
 
-// 檢查是否使用 API 模式
+// 檢查是否使用 API 模式（只打印一次）
+let apiModeLogged = false;
 export const useApiMode = (): boolean => {
-  return getApiUrl() !== null;
+  const apiUrl = getApiUrl();
+  if (!apiModeLogged) {
+    if (apiUrl) {
+      console.log('🌐 API 模式已啟用，後端 URL:', apiUrl);
+    } else {
+      console.log('💾 localStorage 模式（未設置 VITE_API_URL）');
+    }
+    apiModeLogged = true;
+  }
+  return apiUrl !== null;
 };
 
 // API 請求封裝
