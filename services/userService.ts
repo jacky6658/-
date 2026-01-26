@@ -14,6 +14,20 @@ const saveDb = (db: Record<string, UserProfile>) => localStorage.setItem(STORAGE
 const fetchUsersFromApi = async (): Promise<Record<string, UserProfile>> => {
   try {
     const users = await apiRequest('/api/users');
+    console.log(`📥 從 API 獲取用戶資料:`, {
+      count: Object.keys(users).length,
+      users: Object.keys(users).map(uid => {
+        const u = users[uid];
+        return {
+          uid,
+          name: u.displayName,
+          isOnline: u.isOnline,
+          hasAvatar: !!u.avatar,
+          avatarSize: u.avatar ? `${Math.round(u.avatar.length / 1024)}KB` : '無',
+          status: u.status || '無狀態'
+        };
+      })
+    });
     return users;
   } catch (error) {
     console.error('從 API 獲取使用者失敗，降級到 localStorage:', error);
@@ -236,6 +250,40 @@ export const createUserProfile = async (uid: string, email: string, role: Role, 
     isActive: true,
     createdAt: new Date().toISOString()
   };
+  
+  // 如果使用 API 模式，先嘗試創建到後端
+  if (useApiMode()) {
+    try {
+      console.log(`📤 創建用戶到後端: ${uid}`, { email, displayName, role });
+      
+      const created = await apiRequest('/api/users', {
+        method: 'POST',
+        body: JSON.stringify({
+          uid,
+          email,
+          displayName,
+          role,
+          password // 注意：密碼不會存儲在資料庫中，僅用於前端驗證
+        }),
+      });
+      
+      console.log(`✅ 用戶創建成功:`, created);
+      
+      // 同步更新 localStorage
+      const finalProfile = { ...profile, ...created };
+      const db = getDb();
+      db[uid] = finalProfile;
+      saveDb(db);
+      localStorage.setItem(PROFILE_KEY, JSON.stringify(finalProfile));
+      
+      return finalProfile;
+    } catch (error) {
+      console.error('❌ API 創建使用者失敗，降級到 localStorage:', error);
+      // 降級到 localStorage
+    }
+  }
+  
+  // localStorage 模式（降級方案）
   const db = getDb();
   db[uid] = profile;
   saveDb(db);

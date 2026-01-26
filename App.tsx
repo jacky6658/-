@@ -183,37 +183,47 @@ const App: React.FC = () => {
             {/* 右側：在線成員 + 當前用戶 */}
             <div className="flex items-center gap-2 sm:gap-3 shrink-0">
               {/* 在線成員 */}
-              {onlineUsers.length > 0 && (
+              {onlineUsers.length > 0 ? (
                 <div className="flex items-center gap-2 -space-x-2">
-                  {onlineUsers.slice(0, 4).map((onlineUser) => (
-                    <div
-                      key={onlineUser.uid}
-                      onClick={() => handleUserAvatarClick(onlineUser)}
-                      className={`relative cursor-pointer transition-transform active:scale-95 ${
-                        expandedUser?.uid === onlineUser.uid ? 'scale-110 z-10' : 'hover:scale-110'
-                      }`}
-                      title={onlineUser.displayName}
-                    >
-                      {onlineUser.avatar ? (
-                        <img
-                          src={onlineUser.avatar}
-                          alt={onlineUser.displayName}
-                          className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl object-cover border-2 border-white shadow-md"
-                        />
-                      ) : (
-                        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs sm:text-sm font-black border-2 border-white shadow-md">
-                          {getInitials(onlineUser.displayName)}
-                        </div>
-                      )}
-                      <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 sm:w-4 sm:h-4 bg-green-500 border-2 border-white rounded-full shadow-sm"></div>
-                    </div>
-                  ))}
-                  {onlineUsers.length > 4 && (
+                  {onlineUsers
+                    .filter(u => u.uid !== profile?.uid) // 過濾掉當前用戶自己
+                    .slice(0, 4)
+                    .map((onlineUser) => (
+                      <div
+                        key={onlineUser.uid}
+                        onClick={() => handleUserAvatarClick(onlineUser)}
+                        className={`relative cursor-pointer transition-transform active:scale-95 ${
+                          expandedUser?.uid === onlineUser.uid ? 'scale-110 z-10' : 'hover:scale-110'
+                        }`}
+                        title={onlineUser.displayName}
+                      >
+                        {onlineUser.avatar ? (
+                          <img
+                            src={onlineUser.avatar}
+                            alt={onlineUser.displayName}
+                            className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl object-cover border-2 border-white shadow-md"
+                            onError={(e) => {
+                              console.error(`頭貼載入失敗: ${onlineUser.displayName}`, onlineUser.avatar?.substring(0, 50));
+                              // 如果圖片載入失敗，隱藏圖片元素，顯示預設頭像
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs sm:text-sm font-black border-2 border-white shadow-md">
+                            {getInitials(onlineUser.displayName)}
+                          </div>
+                        )}
+                        <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 sm:w-4 sm:h-4 bg-green-500 border-2 border-white rounded-full shadow-sm"></div>
+                      </div>
+                    ))}
+                  {onlineUsers.filter(u => u.uid !== profile?.uid).length > 4 && (
                     <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-slate-200 flex items-center justify-center text-slate-600 text-xs sm:text-sm font-black border-2 border-white shadow-md">
-                      +{onlineUsers.length - 4}
+                      +{onlineUsers.filter(u => u.uid !== profile?.uid).length - 4}
                     </div>
                   )}
                 </div>
+              ) : (
+                <div className="text-xs text-slate-400 italic">無其他在線成員</div>
               )}
 
               {/* 當前用戶 */}

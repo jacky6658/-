@@ -16,11 +16,20 @@ export const updateOnlineStatus = async (uid: string, isOnline: boolean) => {
   // 只有在離線時才設置 lastSeen
   if (!isOnline) {
     updates.lastSeen = now;
+  } else {
+    // 在線時清除 lastSeen（設為 null）
+    updates.lastSeen = undefined; // 這會讓後端設置為 null
   }
   
   console.log(`🔄 更新在線狀態: ${uid} -> ${isOnline ? '在線' : '離線'}`);
   
-  await updateUserProfile(uid, updates);
+  try {
+    await updateUserProfile(uid, updates);
+    console.log(`✅ 在線狀態更新成功: ${uid} = ${isOnline}`);
+  } catch (error) {
+    console.error(`❌ 在線狀態更新失敗: ${uid}`, error);
+    throw error;
+  }
 
   // 更新在線用戶列表（僅用於 localStorage 模式的降級）
   const onlineUsers = getOnlineUsers();
@@ -55,8 +64,20 @@ export const getOnlineUserProfiles = async (): Promise<UserProfile[]> => {
   });
   
   console.log(`👥 獲取在線用戶: 總共 ${allUsers.length} 個用戶，${onlineUsers.length} 個在線`);
+  if (allUsers.length > 0) {
+    console.log(`  所有用戶詳情:`, allUsers.map(u => ({
+      name: u.displayName,
+      uid: u.uid,
+      isOnline: u.isOnline,
+      hasAvatar: !!u.avatar,
+      avatarLength: u.avatar ? u.avatar.length : 0,
+      status: u.status || '無狀態'
+    })));
+  }
   if (onlineUsers.length > 0) {
-    console.log(`  在線用戶:`, onlineUsers.map(u => u.displayName).join(', '));
+    console.log(`  在線用戶:`, onlineUsers.map(u => `${u.displayName} (${u.avatar ? '有頭貼' : '無頭貼'})`).join(', '));
+  } else {
+    console.warn(`⚠️ 沒有在線用戶！所有用戶的在線狀態:`, allUsers.map(u => `${u.displayName}: ${u.isOnline ? '在線' : '離線'}`).join(', '));
   }
   
   return onlineUsers;
@@ -64,7 +85,11 @@ export const getOnlineUserProfiles = async (): Promise<UserProfile[]> => {
 
 // 設置用戶在線（登入時調用）
 export const setUserOnline = async (uid: string) => {
+  console.log(`🟢 設置用戶在線: ${uid}`);
+  
+  // 立即更新在線狀態
   await updateOnlineStatus(uid, true);
+  console.log(`✅ 在線狀態已更新到後端: ${uid}`);
   
   // 清除舊的心跳（如果存在）
   const oldHeartbeat = localStorage.getItem(`heartbeat_${uid}`);
@@ -79,16 +104,18 @@ export const setUserOnline = async (uid: string) => {
     }
   }
   
-  // 設置心跳，定期更新在線狀態
+  // 設置心跳，定期更新在線狀態（每 30 秒）
   const intervalId = window.setInterval(() => {
+    console.log(`💓 心跳更新: ${uid}`);
     updateOnlineStatus(uid, true).catch(console.error);
   }, HEARTBEAT_INTERVAL);
-
+  
   // 保存心跳 ID，登出時清除
   localStorage.setItem(`heartbeat_${uid}`, JSON.stringify({ intervalId }));
   
   // 頁面卸載時設置離線
   const handleBeforeUnload = () => {
+    console.log(`🔴 頁面卸載，設置離線: ${uid}`);
     updateOnlineStatus(uid, false).catch(console.error);
   };
   window.addEventListener('beforeunload', handleBeforeUnload);
