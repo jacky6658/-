@@ -114,8 +114,17 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
         };
         setSelectedLead(draftLead as Lead);
         setIsModalOpen(true);
-      } catch (err) {
-        alert("AI 解析或圖片處理失敗。");
+      } catch (err: any) {
+        console.error('AI 解析錯誤:', err);
+        // 顯示更具體的錯誤訊息
+        const errorMessage = err?.message || '未知錯誤';
+        if (errorMessage.includes('API Key')) {
+          alert(`❌ ${errorMessage}\n\n請在 .env 文件中設置 VITE_API_KEY 或 GEMINI_API_KEY\n獲取 API Key: https://aistudio.google.com/app/apikey`);
+        } else if (errorMessage.includes('網路')) {
+          alert(`❌ ${errorMessage}\n\n請檢查您的網路連線後再試。`);
+        } else {
+          alert(`❌ AI 解析失敗：${errorMessage}\n\n請確認：\n1. 已設置 API Key\n2. 圖片清晰可讀\n3. 網路連線正常`);
+        }
       } finally {
         setAiLoading(false);
         if (aiFileInputRef.current) aiFileInputRef.current.value = '';
@@ -264,7 +273,11 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
               {filteredLeads.map((lead) => {
                 const isExpanded = expandedNeeds.has(lead.id);
                 return (
-                  <tr key={lead.id} className="hover:bg-slate-50/50 transition-all group align-top">
+                  <tr 
+                    key={lead.id} 
+                    onClick={() => { setSelectedLead(lead); setIsModalOpen(true); }}
+                    className="hover:bg-slate-50/50 transition-all group align-top cursor-pointer"
+                  >
                     <td className="px-4 sm:px-6 py-4 sm:py-6 whitespace-nowrap">
                       <div className="flex flex-col gap-1">
                         <span className="text-xs font-black text-indigo-600">{lead.platform}</span>
@@ -276,7 +289,10 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
                     </td>
                     <td className="px-4 sm:px-6 py-4 sm:py-6 max-w-[200px] sm:max-w-sm">
                       <div 
-                        onClick={() => toggleNeed(lead.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleNeed(lead.id);
+                        }}
                         className="cursor-pointer group/need relative"
                       >
                         <p className={`text-sm text-slate-700 font-medium leading-relaxed transition-all duration-300 ${isExpanded ? 'whitespace-pre-wrap' : 'line-clamp-2'}`}>
@@ -332,13 +348,19 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
                     <td className="px-4 sm:px-6 py-4 sm:py-6 text-center whitespace-nowrap">
                       <div className="flex items-center justify-center gap-2">
                         <button 
-                          onClick={() => handleQuickDecision(lead, Decision.ACCEPT)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleQuickDecision(lead, Decision.ACCEPT);
+                          }}
                           className={`p-2.5 rounded-xl border transition-all ${lead.decision === Decision.ACCEPT ? 'bg-green-500 text-white border-green-600' : 'bg-white text-green-600 border-gray-200 hover:bg-green-50'}`}
                         >
                           <Check size={16} />
                         </button>
                         <button 
-                          onClick={() => handleQuickDecision(lead, Decision.REJECT)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleQuickDecision(lead, Decision.REJECT);
+                          }}
                           className={`p-2.5 rounded-xl border transition-all ${lead.decision === Decision.REJECT ? 'bg-red-500 text-white border-red-600' : 'bg-white text-red-600 border-gray-200 hover:bg-red-50'}`}
                         >
                           <X size={16} />
@@ -361,14 +383,21 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
                     <td className="px-4 sm:px-6 py-4 sm:py-6 text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-2">
                         <button 
-                          onClick={() => { setSelectedLead(lead); setIsModalOpen(true); }} 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedLead(lead);
+                            setIsModalOpen(true);
+                          }} 
                           className="p-2 bg-slate-100 text-slate-500 hover:bg-slate-900 hover:text-white rounded-xl transition-all opacity-0 group-hover:opacity-100"
                           title="編輯案件"
                         >
                           <Edit2 size={16}/>
                         </button>
                         <button 
-                          onClick={() => handleDelete(lead.id)} 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(lead.id);
+                          }} 
                           className="p-2 bg-slate-100 text-red-500 hover:bg-red-600 hover:text-white rounded-xl transition-all opacity-0 group-hover:opacity-100"
                           title="刪除案件"
                         >

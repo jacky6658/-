@@ -79,17 +79,44 @@ export const extractLeadFromImage = async (base64Data: string): Promise<Partial<
     return result;
   } catch (e: any) {
     console.error("AI Service Error:", e);
+    console.error("錯誤詳情:", {
+      message: e?.message,
+      status: e?.status,
+      statusText: e?.statusText,
+      response: e?.response
+    });
     
     // 檢查是否為 API Key 相關錯誤
-    if (e?.message?.includes('API Key') || e?.message?.includes('apiKey') || e?.message?.includes('401') || e?.message?.includes('403')) {
-      throw new Error("API Key 未設置或無效。請在 .env 文件中設置 VITE_API_KEY。獲取 API Key: https://aistudio.google.com/app/apikey");
+    if (e?.message?.includes('API Key') || 
+        e?.message?.includes('apiKey') || 
+        e?.message?.includes('請設置 API Key') ||
+        e?.status === 401 || 
+        e?.status === 403 ||
+        e?.response?.status === 401 ||
+        e?.response?.status === 403) {
+      throw new Error("API Key 未設置或無效。請在 .env 文件中設置 VITE_API_KEY 或 GEMINI_API_KEY。獲取 API Key: https://aistudio.google.com/app/apikey");
     }
     
     // 檢查是否為網路錯誤
-    if (e?.message?.includes('fetch') || e?.message?.includes('network') || e?.message?.includes('NetworkError')) {
+    if (e?.message?.includes('fetch') || 
+        e?.message?.includes('network') || 
+        e?.message?.includes('NetworkError') ||
+        e?.message?.includes('Failed to fetch')) {
       throw new Error("網路連線失敗，請檢查您的網路連線");
     }
     
-    throw new Error("AI 識別失敗，請確認網路與圖片品質");
+    // 檢查是否為配額或限流錯誤
+    if (e?.status === 429 || e?.response?.status === 429 || e?.message?.includes('429') || e?.message?.includes('quota')) {
+      throw new Error("API 配額已用完或請求過於頻繁，請稍後再試");
+    }
+    
+    // 檢查是否為圖片格式錯誤
+    if (e?.message?.includes('image') || e?.message?.includes('mimeType') || e?.message?.includes('format')) {
+      throw new Error("圖片格式不支援，請使用 JPG、PNG 等常見格式");
+    }
+    
+    // 返回更具體的錯誤訊息
+    const errorMsg = e?.message || e?.toString() || '未知錯誤';
+    throw new Error(`AI 識別失敗：${errorMsg}。請確認網路連線、API Key 設置和圖片品質`);
   }
 };

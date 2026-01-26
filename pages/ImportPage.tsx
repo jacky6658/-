@@ -2,7 +2,7 @@
 import React, { useState, useRef } from 'react';
 import { UserProfile, Lead, LeadStatus, Decision, Platform, ContactStatus } from '../types';
 import { createLead } from '../services/leadService';
-import { Upload, AlertCircle, CheckCircle, FileText, FileSpreadsheet } from 'lucide-react';
+import { Upload, AlertCircle, CheckCircle, FileText, FileSpreadsheet, Link as LinkIcon } from 'lucide-react';
 
 interface ImportPageProps {
   userProfile: UserProfile;
@@ -13,8 +13,9 @@ const ImportPage: React.FC<ImportPageProps> = () => {
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [message, setMessage] = useState('');
-  const [importMode, setImportMode] = useState<'csv' | 'excel'>('csv');
+  const [importMode, setImportMode] = useState<'csv' | 'excel' | 'url'>('csv');
   const [excelFileName, setExcelFileName] = useState<string>('');
+  const [urlInput, setUrlInput] = useState<string>('');
   const excelFileInputRef = useRef<HTMLInputElement>(null);
 
   const processLeadData = async (leadData: any, totalRows: number, currentCount: number) => {
@@ -148,6 +149,122 @@ const ImportPage: React.FC<ImportPageProps> = () => {
     }
   };
 
+  // 解析 Pro360 URL
+  const parsePro360Url = (url: string) => {
+    try {
+      const urlObj = new URL(url);
+      const params = new URLSearchParams(urlObj.search);
+      
+      // 提取參數
+      const quoteBidId = params.get('quote_bid_id');
+      const pk = params.get('pk');
+      const from = params.get('from');
+      
+      // 從 from 參數中提取 request_id
+      let requestId = null;
+      if (from) {
+        const match = from.match(/\/requests\/(\d+)/);
+        if (match) {
+          requestId = match[1];
+        }
+      }
+      
+      return {
+        platform: Platform.PRO360,
+        platform_id: quoteBidId || requestId || pk || 'Unknown',
+        quote_bid_id: quoteBidId,
+        request_id: requestId,
+        pk: pk,
+        url: url
+      };
+    } catch (error) {
+      console.error('URL 解析失敗:', error);
+      return null;
+    }
+  };
+
+  // 處理 URL 匯入
+  const handleUrlImport = async () => {
+    if (!urlInput.trim()) {
+      setMessage('請輸入 URL');
+      return;
+    }
+
+    setImporting(true);
+    setMessage('解析 URL 中...');
+    setProgress(0);
+
+    try {
+      const url = urlInput.trim();
+      
+      // 檢查是否為 Pro360 URL
+      if (url.includes('pro360.com.tw')) {
+        const parsed = parsePro360Url(url);
+        if (!parsed) {
+          setMessage('URL 格式錯誤，無法解析！');
+          setImporting(false);
+          return;
+        }
+
+        setMessage('正在創建案件...');
+        setProgress(50);
+
+        // 創建案件
+        await createLead({
+          platform: parsed.platform,
+          platform_id: parsed.platform_id,
+          contact_status: ContactStatus.UNRESPONDED,
+          need: `Pro360 案件 - 報價單 ID: ${parsed.quote_bid_id || parsed.request_id || 'N/A'}`,
+          budget_text: '待確認',
+          posted_at: new Date().toISOString(),
+          note: `來源: Pro360\n報價單 ID: ${parsed.quote_bid_id || 'N/A'}\n請求 ID: ${parsed.request_id || 'N/A'}\nPK: ${parsed.pk || 'N/A'}`,
+          links: [url], // 將 URL 保存為連結
+          phone: '',
+          email: '',
+          location: '',
+          status: LeadStatus.TO_FILTER,
+          decision: Decision.PENDING,
+          priority: 3
+        });
+
+        setProgress(100);
+        setMessage('✅ 成功匯入案件！');
+        setUrlInput('');
+      } else {
+        // 其他平台的 URL，創建通用案件
+        setMessage('正在創建案件...');
+        setProgress(50);
+
+        await createLead({
+          platform: Platform.OTHER,
+          platform_id: 'URL Import',
+          contact_status: ContactStatus.UNRESPONDED,
+          need: '從 URL 匯入的案件',
+          budget_text: '待確認',
+          posted_at: new Date().toISOString(),
+          note: `來源 URL: ${url}`,
+          links: [url],
+          phone: '',
+          email: '',
+          location: '',
+          status: LeadStatus.TO_FILTER,
+          decision: Decision.PENDING,
+          priority: 3
+        });
+
+        setProgress(100);
+        setMessage('✅ 成功匯入案件！');
+        setUrlInput('');
+      }
+    } catch (error) {
+      console.error('URL 匯入失敗:', error);
+      setMessage('❌ 匯入失敗，請檢查 URL 格式！');
+    } finally {
+      setImporting(false);
+      setTimeout(() => setProgress(0), 2000);
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-200">
@@ -162,7 +279,7 @@ const ImportPage: React.FC<ImportPageProps> = () => {
         </div>
 
         {/* 匯入模式選擇 */}
-        <div className="flex gap-3 mb-6">
+        <div className="flex gap-3 mb-6 flex-wrap">
           <button
             onClick={() => setImportMode('csv')}
             className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all ${
@@ -185,9 +302,73 @@ const ImportPage: React.FC<ImportPageProps> = () => {
             <FileSpreadsheet size={18} />
             Excel 檔案上傳
           </button>
+          <button
+            onClick={() => setImportMode('url')}
+            className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all ${
+              importMode === 'url'
+                ? 'bg-purple-600 text-white shadow-lg'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            <LinkIcon size={18} />
+            URL 快速匯入
+          </button>
         </div>
 
-        {importMode === 'csv' ? (
+        {importMode === 'url' ? (
+          <>
+            <div className="bg-purple-50 border-l-4 border-purple-400 p-4 mb-6">
+              <div className="flex gap-3">
+                <AlertCircle size={20} className="text-purple-600 shrink-0" />
+                <div className="text-xs text-purple-800 leading-relaxed">
+                  <p className="font-bold mb-1">URL 匯入說明：</p>
+                  <p>支援 Pro360 等平台的 URL，系統會自動解析並創建案件。</p>
+                  <p className="font-mono mt-1 bg-white/50 p-1 rounded text-[10px]">
+                    例如：https://www.pro360.com.tw/login?pk=2666878&path=request_detail&quote_bid_id=2388916867
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <label className="block text-sm font-semibold text-gray-700">貼上 URL</label>
+              <input
+                type="url"
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+                placeholder="https://www.pro360.com.tw/login?pk=2666878&path=request_detail&quote_bid_id=2388916867"
+                className="w-full px-4 py-3 bg-slate-50 border-gray-200 focus:bg-white focus:ring-2 focus:ring-purple-500 rounded-xl transition-all font-mono text-sm"
+              />
+              
+              {importing && (
+                <div className="space-y-2">
+                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-purple-600 transition-all duration-300" style={{ width: `${progress}%` }}></div>
+                  </div>
+                  <p className="text-xs text-gray-500 text-center">{progress}% 完成</p>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between pt-4">
+                {message && (
+                  <div className={`flex items-center gap-2 text-sm font-medium ${
+                    message.includes('成功') ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {message.includes('成功') ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+                    {message}
+                  </div>
+                )}
+                <button 
+                  disabled={importing || !urlInput.trim()}
+                  onClick={handleUrlImport}
+                  className="ml-auto flex items-center gap-2 bg-purple-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-xl shadow-purple-200"
+                >
+                  {importing ? '處理中...' : '開始匯入'}
+                </button>
+              </div>
+            </div>
+          </>
+        ) : importMode === 'csv' ? (
           <>
             <div className="bg-amber-50 border-l-4 border-amber-400 p-4 mb-6">
               <div className="flex gap-3">

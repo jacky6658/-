@@ -32,28 +32,29 @@ const App: React.FC = () => {
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (u) {
-        // 先從 localStorage 讀取 profile（登入時已保存）
-        const savedProfile = localStorage.getItem('caseflow_profile');
-        if (savedProfile) {
-          try {
-            const p = JSON.parse(savedProfile);
-            setProfile(p);
-            // 設置在線狀態
-            await setUserOnline(p.uid);
-            setLoading(false);
-            return;
-          } catch (e) {
-            console.error('Failed to parse saved profile', e);
-          }
-        }
-        
-        // 如果沒有保存的 profile，從資料庫查找
+        // 在 API 模式下，總是從後端獲取最新的用戶資料
+        // 這樣可以確保看到最新的頭貼和狀態
         const p = await getUserProfile(u.uid);
         if (p) {
           setProfile(p);
+          // 同步更新 localStorage（用於降級方案）
           localStorage.setItem('caseflow_profile', JSON.stringify(p));
           // 設置在線狀態
           await setUserOnline(p.uid);
+        } else {
+          // 如果後端沒有資料，嘗試從 localStorage 讀取（降級方案）
+          const savedProfile = localStorage.getItem('caseflow_profile');
+          if (savedProfile) {
+            try {
+              const p = JSON.parse(savedProfile);
+              if (p.uid === u.uid) {
+                setProfile(p);
+                await setUserOnline(p.uid);
+              }
+            } catch (e) {
+              console.error('Failed to parse saved profile', e);
+            }
+          }
         }
       } else {
         // 登出時設置離線
@@ -67,13 +68,20 @@ const App: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  // 定期更新在線用戶列表
+  // 定期更新在線用戶列表（包括頭貼和狀態）
   useEffect(() => {
     if (!profile) return;
 
     const updateOnlineUsers = async () => {
-      const online = await getOnlineUserProfiles();
-      setOnlineUsers(online);
+      try {
+        const online = await getOnlineUserProfiles();
+        setOnlineUsers(online);
+        console.log(`👥 更新在線用戶列表: ${online.length} 個用戶`, 
+          online.map(u => ({ name: u.displayName, hasAvatar: !!u.avatar, status: u.status }))
+        );
+      } catch (error) {
+        console.error('更新在線用戶列表失敗:', error);
+      }
     };
 
     updateOnlineUsers();

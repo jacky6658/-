@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Lead, Platform, ContactStatus, LeadStatus, Role, ProgressUpdate, ChangeHistory } from '../types';
 import { CONTACT_STATUS_OPTIONS, PLATFORM_OPTIONS } from '../constants';
-import { X, Upload, Sparkles, User, Loader2, Info, Plus, MessageSquare, Calendar, History, TrendingUp, Camera } from 'lucide-react';
+import { X, Upload, Sparkles, User, Loader2, Info, Plus, MessageSquare, Calendar, History, TrendingUp, Camera, Link as LinkIcon } from 'lucide-react';
 import { extractLeadFromImage } from '../services/aiService';
 import { addProgressUpdate } from '../services/leadService';
 
@@ -18,8 +18,12 @@ interface LeadModalProps {
 const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initialData, userRole, userName }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const aiFileInputRef = useRef<HTMLInputElement>(null);
+  const aiDropZoneRef = useRef<HTMLDivElement>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [isAiFilled, setIsAiFilled] = useState(false);
+  const [isAiDragging, setIsAiDragging] = useState(false);
+  const [urlInput, setUrlInput] = useState('');
+  const [urlLoading, setUrlLoading] = useState(false);
   const [progressContent, setProgressContent] = useState('');
   const [isAddingProgress, setIsAddingProgress] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -87,9 +91,19 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
     });
   };
 
-  const handleAiScan = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // 處理圖片文件的通用函數
+  const processAiImageFile = async (file: File) => {
+    // 檢查檔案類型
+    if (!file.type.startsWith('image/')) {
+      alert('請選擇圖片檔案');
+      return;
+    }
+
+    // 檢查檔案大小（限制 10MB）
+    if (file.size > 10 * 1024 * 1024) {
+      alert('圖片大小不能超過 10MB');
+      return;
+    }
 
     setAiLoading(true);
     const reader = new FileReader();
@@ -103,13 +117,141 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
           links: [...(prev.links || []), base64String]
         }));
         setIsAiFilled(true);
-      } catch (err) {
-        alert("AI 解析失敗，請嘗試更清晰的圖片。");
+      } catch (err: any) {
+        console.error('AI 解析錯誤:', err);
+        // 顯示更具體的錯誤訊息
+        const errorMessage = err?.message || '未知錯誤';
+        if (errorMessage.includes('API Key')) {
+          alert(`❌ ${errorMessage}\n\n請在 .env 文件中設置 VITE_API_KEY 或 GEMINI_API_KEY\n獲取 API Key: https://aistudio.google.com/app/apikey`);
+        } else if (errorMessage.includes('網路')) {
+          alert(`❌ ${errorMessage}\n\n請檢查您的網路連線後再試。`);
+        } else {
+          alert(`❌ AI 解析失敗：${errorMessage}\n\n請確認：\n1. 已設置 API Key\n2. 圖片清晰可讀\n3. 網路連線正常`);
+        }
       } finally {
         setAiLoading(false);
       }
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleAiScan = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await processAiImageFile(file);
+  };
+
+  // 拖放事件處理
+  const handleAiDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsAiDragging(true);
+  };
+
+  const handleAiDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsAiDragging(false);
+  };
+
+  const handleAiDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsAiDragging(false);
+
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      await processAiImageFile(file);
+    }
+  };
+
+  // 解析 Pro360 URL
+  const parsePro360Url = (url: string) => {
+    try {
+      const urlObj = new URL(url);
+      const params = new URLSearchParams(urlObj.search);
+      
+      const quoteBidId = params.get('quote_bid_id');
+      const pk = params.get('pk');
+      const from = params.get('from');
+      
+      let requestId = null;
+      if (from) {
+        const match = from.match(/\/requests\/(\d+)/);
+        if (match) {
+          requestId = match[1];
+        }
+      }
+      
+      return {
+        platform: Platform.PRO360,
+        platform_id: quoteBidId || requestId || pk || 'Unknown',
+        quote_bid_id: quoteBidId,
+        request_id: requestId,
+        pk: pk,
+        url: url
+      };
+    } catch (error) {
+      console.error('URL 解析失敗:', error);
+      return null;
+    }
+  };
+
+  // 處理 URL 匯入
+  const handleUrlImport = async () => {
+    if (!urlInput.trim()) {
+      alert('請輸入 URL');
+      return;
+    }
+
+    setUrlLoading(true);
+    const url = urlInput.trim();
+
+    try {
+      if (url.includes('pro360.com.tw')) {
+        const parsed = parsePro360Url(url);
+        if (!parsed) {
+          alert('URL 格式錯誤，無法解析！');
+          setUrlLoading(false);
+          return;
+        }
+
+        // 自動填入表單
+        setFormData(prev => ({
+          ...prev,
+          platform: parsed.platform,
+          platform_id: parsed.platform_id,
+          need: prev.need || `Pro360 案件 - 報價單 ID: ${parsed.quote_bid_id || parsed.request_id || 'N/A'}`,
+          budget_text: prev.budget_text || '待確認',
+          note: prev.note || `來源: Pro360\n報價單 ID: ${parsed.quote_bid_id || 'N/A'}\n請求 ID: ${parsed.request_id || 'N/A'}\nPK: ${parsed.pk || 'N/A'}`,
+          links: [...(prev.links || []), url]
+        }));
+
+        setIsAiFilled(true);
+        setUrlInput('');
+        alert('✅ URL 解析成功！已自動填入表單，請檢查後儲存。');
+      } else {
+        // 其他平台的 URL
+        setFormData(prev => ({
+          ...prev,
+          platform: Platform.OTHER,
+          platform_id: prev.platform_id || 'URL Import',
+          need: prev.need || '從 URL 匯入的案件',
+          budget_text: prev.budget_text || '待確認',
+          note: prev.note || `來源 URL: ${url}`,
+          links: [...(prev.links || []), url]
+        }));
+
+        setIsAiFilled(true);
+        setUrlInput('');
+        alert('✅ URL 已添加！已自動填入表單，請檢查後儲存。');
+      }
+    } catch (error) {
+      console.error('URL 匯入失敗:', error);
+      alert('❌ URL 處理失敗，請檢查 URL 格式！');
+    } finally {
+      setUrlLoading(false);
+    }
   };
 
   const removeImage = (index: number) => {
@@ -206,37 +348,96 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto p-8 scrollbar-hide">
           <form id="lead-form" className="space-y-10" onSubmit={handleFormSubmit}>
-            {/* AI 截圖匯入按鈕 - 優化版 */}
+            {/* AI 截圖匯入和 URL 匯入 */}
             {!initialData && (
-              <div className="bg-gradient-to-r from-indigo-50 to-violet-50 p-4 rounded-2xl border-2 border-indigo-200">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-indigo-600 text-white p-3 rounded-xl">
-                      <Camera size={20} />
+              <div className="space-y-4">
+                {/* AI 截圖匯入 */}
+                <div
+                  ref={aiDropZoneRef}
+                  onDragOver={handleAiDragOver}
+                  onDragLeave={handleAiDragLeave}
+                  onDrop={handleAiDrop}
+                  onClick={() => !aiLoading && aiFileInputRef.current?.click()}
+                  className={`bg-gradient-to-r from-indigo-50 to-violet-50 p-4 rounded-2xl border-2 transition-all cursor-pointer ${
+                    isAiDragging
+                      ? 'border-indigo-500 bg-indigo-100 scale-[1.02] shadow-lg'
+                      : 'border-indigo-200 hover:border-indigo-300 hover:shadow-md'
+                  } ${aiLoading ? 'opacity-75 cursor-wait' : ''}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-indigo-600 text-white p-3 rounded-xl">
+                        <Camera size={20} />
+                      </div>
+                      <div>
+                        <p className="font-black text-indigo-900 text-sm">AI 智能截圖匯入</p>
+                        <p className="text-indigo-600/70 font-bold text-xs">
+                          {isAiDragging ? '放開以上傳' : '拖放截圖至此或點擊上傳'}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-black text-indigo-900 text-sm">AI 智能截圖匯入</p>
-                      <p className="text-indigo-600/70 font-bold text-xs">上傳截圖自動識別案件資訊</p>
+                    <div className="flex items-center gap-2">
+                      {aiLoading ? (
+                        <div className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-sm flex items-center gap-2">
+                          <Loader2 className="animate-spin" size={16} />
+                          識別中...
+                        </div>
+                      ) : (
+                        <div className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-sm flex items-center gap-2 hover:bg-indigo-700 transition-all">
+                          <Sparkles size={16} />
+                          選擇截圖
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => aiFileInputRef.current?.click()}
-                    disabled={aiLoading}
-                    className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-sm hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                  >
-                    {aiLoading ? (
-                      <>
-                        <Loader2 className="animate-spin" size={16} />
-                        識別中...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles size={16} />
-                        選擇截圖
-                      </>
-                    )}
-                  </button>
+                </div>
+
+                {/* URL 快速匯入 */}
+                <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-4 rounded-2xl border-2 border-purple-200">
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-purple-600 text-white p-3 rounded-xl">
+                        <LinkIcon size={20} />
+                      </div>
+                      <div>
+                        <p className="font-black text-purple-900 text-sm">URL 快速匯入</p>
+                        <p className="text-purple-600/70 font-bold text-xs">貼上 Pro360 等平台網址自動填入</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <input
+                        type="url"
+                        value={urlInput}
+                        onChange={(e) => setUrlInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleUrlImport();
+                          }
+                        }}
+                        placeholder="貼上 Pro360 URL，例如：https://www.pro360.com.tw/..."
+                        className="flex-1 px-4 py-2.5 bg-white border-2 border-purple-200 rounded-xl font-mono text-xs focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleUrlImport}
+                        disabled={urlLoading || !urlInput.trim()}
+                        className="px-6 py-2.5 bg-purple-600 text-white rounded-xl font-black text-sm hover:bg-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      >
+                        {urlLoading ? (
+                          <>
+                            <Loader2 className="animate-spin" size={16} />
+                            處理中...
+                          </>
+                        ) : (
+                          <>
+                            <LinkIcon size={16} />
+                            匯入
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}

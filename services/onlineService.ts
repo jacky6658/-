@@ -7,12 +7,22 @@ const HEARTBEAT_INTERVAL = 30000; // 30秒心跳
 // 更新用戶在線狀態
 export const updateOnlineStatus = async (uid: string, isOnline: boolean) => {
   const now = new Date().toISOString();
-  await updateUserProfile(uid, {
+  
+  // 構建更新對象，明確處理 lastSeen
+  const updates: Partial<UserProfile> = {
     isOnline,
-    lastSeen: isOnline ? undefined : now
-  });
+  };
+  
+  // 只有在離線時才設置 lastSeen
+  if (!isOnline) {
+    updates.lastSeen = now;
+  }
+  
+  console.log(`🔄 更新在線狀態: ${uid} -> ${isOnline ? '在線' : '離線'}`);
+  
+  await updateUserProfile(uid, updates);
 
-  // 更新在線用戶列表
+  // 更新在線用戶列表（僅用於 localStorage 模式的降級）
   const onlineUsers = getOnlineUsers();
   if (isOnline) {
     if (!onlineUsers.includes(uid)) {
@@ -40,8 +50,14 @@ export const getOnlineUserProfiles = async (): Promise<UserProfile[]> => {
   // 後端已經返回了 isOnline 狀態
   const onlineUsers = allUsers.filter(user => {
     // 檢查用戶資料中標記為在線，且用戶是啟用狀態
-    return user.isOnline === true && user.isActive !== false;
+    const isOnline = user.isOnline === true && user.isActive !== false;
+    return isOnline;
   });
+  
+  console.log(`👥 獲取在線用戶: 總共 ${allUsers.length} 個用戶，${onlineUsers.length} 個在線`);
+  if (onlineUsers.length > 0) {
+    console.log(`  在線用戶:`, onlineUsers.map(u => u.displayName).join(', '));
+  }
   
   return onlineUsers;
 };
