@@ -119,8 +119,8 @@ export const updateLead = async (id: string, updates: Partial<Lead>, actionType:
       const after = {
         ...before,
         ...updates,
-        last_action_by: actorName,
-        updated_at: new Date().toISOString()
+        last_action_by: actorName
+        // 注意：不包含 updated_at，讓後端統一處理
       };
 
       // 記錄欄位變更
