@@ -48,6 +48,15 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
     if (initialData) {
       setFormData({
         ...initialData,
+        // 確保所有可能為 null 的欄位都轉換為空字符串
+        need: initialData.need || '',
+        budget_text: initialData.budget_text || '',
+        platform_id: initialData.platform_id || '',
+        phone: initialData.phone || '',
+        email: initialData.email || '',
+        location: initialData.location || '',
+        note: initialData.note || '',
+        internal_remarks: initialData.internal_remarks || '',
         posted_at: initialData.posted_at ? initialData.posted_at.split('T')[0] : new Date().toISOString().split('T')[0]
       });
       setIsAiFilled(false);
@@ -471,7 +480,7 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
                   type="text" 
                   placeholder="例如：王小明"
                   className={`w-full rounded-2xl border-2 p-4 font-bold transition-all ${isAiFilled ? 'border-indigo-200 bg-indigo-50/30' : 'border-slate-100 bg-slate-50 focus:bg-white focus:border-indigo-500'} text-slate-800`}
-                  value={formData.platform_id}
+                  value={formData.platform_id || ''}
                   onChange={(e) => setFormData({ ...formData, platform_id: e.target.value })}
                 />
               </div>
@@ -493,7 +502,7 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">預算狀況</label>
-                <input type="text" placeholder="例如：1萬以下" className={`w-full rounded-2xl border-2 p-4 font-black transition-all ${isAiFilled ? 'border-indigo-200 bg-indigo-50/30' : 'border-slate-100 bg-slate-50 focus:bg-white focus:border-indigo-500'} text-slate-800`} value={formData.budget_text} onChange={(e) => setFormData({ ...formData, budget_text: e.target.value })} />
+                <input type="text" placeholder="例如：1萬以下" className={`w-full rounded-2xl border-2 p-4 font-black transition-all ${isAiFilled ? 'border-indigo-200 bg-indigo-50/30' : 'border-slate-100 bg-slate-50 focus:bg-white focus:border-indigo-500'} text-slate-800`} value={formData.budget_text || ''} onChange={(e) => setFormData({ ...formData, budget_text: e.target.value })} />
               </div>
             </section>
 
@@ -504,7 +513,7 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
                 rows={4}
                 placeholder="在此填寫內容..."
                 className={`w-full rounded-2xl border-2 p-5 font-medium leading-relaxed transition-all ${isAiFilled ? 'border-indigo-200 bg-indigo-50/30' : 'border-slate-100 bg-slate-50 focus:bg-white focus:border-indigo-500'} text-slate-800`}
-                value={formData.need}
+                value={formData.need || ''}
                 onChange={(e) => setFormData({ ...formData, need: e.target.value })}
               />
             </section>
@@ -527,7 +536,7 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
                 rows={2}
                 placeholder="筆記或判斷理由..."
                 className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-sm font-medium focus:ring-2 focus:ring-indigo-500 transition-all"
-                value={formData.internal_remarks}
+                value={formData.internal_remarks || ''}
                 onChange={(e) => setFormData({ ...formData, internal_remarks: e.target.value })}
               />
             </section>

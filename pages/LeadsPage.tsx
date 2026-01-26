@@ -231,31 +231,34 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
         </div>
         
         <div className="flex items-center gap-3">
-          <button 
-            onClick={() => aiFileInputRef.current?.click()}
-            className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl text-sm font-black hover:bg-indigo-700 transition-all shadow-lg active:scale-95"
-          >
-            <Camera size={18} />
-            AI 傳圖識別
-          </button>
-          <input type="file" ref={aiFileInputRef} className="hidden" accept="image/*" onChange={(e) => e.target.files?.[0] && processAiFile(e.target.files[0])} />
-          
-          <button 
-            onClick={() => { setSelectedLead(null); setIsModalOpen(true); }}
+              <button 
+                onClick={() => aiFileInputRef.current?.click()}
+                className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl text-sm font-black hover:bg-indigo-700 transition-all shadow-lg active:scale-95"
+              >
+                <Camera size={18} />
+                AI 傳圖識別
+              </button>
+              <input type="file" ref={aiFileInputRef} className="hidden" accept="image/*" onChange={(e) => e.target.files?.[0] && processAiFile(e.target.files[0])} />
+              
+              <button 
+                onClick={() => { setSelectedLead(null); setIsModalOpen(true); }}
             className="flex items-center gap-2 bg-emerald-600 text-white px-6 py-3 rounded-2xl text-sm font-black hover:bg-emerald-700 transition-all shadow-lg active:scale-95"
             title="手動新增案件"
-          >
+              >
             <Plus size={18} />
             新增案件
-          </button>
+              </button>
         </div>
       </div>
 
       <div className="bg-white rounded-2xl sm:rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
         <div 
           ref={tableScrollRef}
-          className={`table-scroll-container relative overflow-x-auto overscroll-x-contain scrollbar-thin ${isScrolledToEnd ? 'scrolled-to-end' : ''}`}
-          style={{ WebkitOverflowScrolling: 'touch' }}
+          className={`table-scroll-container relative overflow-x-auto overflow-y-auto overscroll-contain scrollbar-thin ${isScrolledToEnd ? 'scrolled-to-end' : ''}`}
+          style={{ 
+            WebkitOverflowScrolling: 'touch',
+            maxHeight: 'calc(100vh - 300px)' // 設置最大高度，超出時可上下滾動
+          }}
         >
           <table className="min-w-[900px] sm:min-w-full divide-y divide-gray-100">
             <thead className="bg-gray-50/50 sticky top-0 z-10">

@@ -27,7 +27,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ leads, onSelectLead, userRole
   };
 
   return (
-    <div className="flex gap-4 overflow-x-auto pb-4 h-full scrollbar-hide">
+    <div className="flex gap-4 overflow-x-auto pb-4 h-full scrollbar-thin">
       {STATUS_OPTIONS.map((status) => {
         const columnLeads = leads.filter(l => l.status === status);
         return (
