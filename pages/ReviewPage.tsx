@@ -1,10 +1,12 @@
 
 import React, { useState } from 'react';
-import { Lead, UserProfile, LeadStatus, Decision } from '../types';
+import { Lead, UserProfile, LeadStatus, Decision, Role } from '../types';
 import Badge from '../components/Badge';
 import { DECISION_COLORS } from '../constants';
 import DecisionModal from '../components/DecisionModal';
+import LeadModal from '../components/LeadModal';
 import { Clock, DollarSign, User, AlertCircle, CheckSquare, MessageSquare } from 'lucide-react';
+import { updateLead } from '../services/leadService';
 
 interface ReviewPageProps {
   leads: Lead[];
@@ -13,6 +15,8 @@ interface ReviewPageProps {
 
 const ReviewPage: React.FC<ReviewPageProps> = ({ leads, userProfile }) => {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [detailLead, setDetailLead] = useState<Lead | null>(null);
 
   const reviewLeads = leads.filter(l => 
     l.status === LeadStatus.TO_FILTER || l.assigned_to === userProfile.uid
@@ -22,7 +26,14 @@ const ReviewPage: React.FC<ReviewPageProps> = ({ leads, userProfile }) => {
     <div className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-8">
         {reviewLeads.map((lead) => (
-          <div key={lead.id} className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col group">
+          <div 
+            key={lead.id} 
+            onClick={() => {
+              setDetailLead(lead);
+              setShowDetailModal(true);
+            }}
+            className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col group cursor-pointer"
+          >
             <div className="p-7 flex-1">
               <div className="flex items-center justify-between mb-5">
                 <Badge className="bg-slate-900 text-white uppercase tracking-widest font-black text-[10px] px-3 py-1 rounded-lg">{lead.platform}</Badge>
@@ -58,7 +69,10 @@ const ReviewPage: React.FC<ReviewPageProps> = ({ leads, userProfile }) => {
 
             <div className="p-5 bg-slate-50/50 border-t border-gray-50">
               <button 
-                onClick={() => setSelectedLead(lead)}
+                onClick={(e) => {
+                  e.stopPropagation(); // 阻止觸發卡片點擊
+                  setSelectedLead(lead);
+                }}
                 className="w-full flex items-center justify-center gap-2 bg-white border border-slate-200 py-4 rounded-2xl text-sm font-black text-slate-700 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-all shadow-sm active:scale-95"
               >
                 <AlertCircle size={18} />
@@ -82,6 +96,28 @@ const ReviewPage: React.FC<ReviewPageProps> = ({ leads, userProfile }) => {
           onClose={() => setSelectedLead(null)}
           onSuccess={() => setSelectedLead(null)}
           userProfile={userProfile}
+        />
+      )}
+
+      {/* 案件詳細內容 Modal */}
+      {detailLead && (
+        <LeadModal
+          isOpen={showDetailModal}
+          onClose={() => {
+            setShowDetailModal(false);
+            setDetailLead(null);
+          }}
+          onSubmit={async (data) => {
+            if (detailLead) {
+              await updateLead(detailLead.id, data);
+              // 更新本地狀態
+              const updatedLead = { ...detailLead, ...data };
+              setDetailLead(updatedLead);
+            }
+          }}
+          initialData={detailLead}
+          userRole={userProfile.role}
+          userName={userProfile.displayName}
         />
       )}
     </div>

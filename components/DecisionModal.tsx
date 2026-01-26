@@ -24,18 +24,35 @@ const DecisionModal: React.FC<DecisionModalProps> = ({ lead, isOpen, onClose, on
   const handleSave = async () => {
     setLoading(true);
     try {
-      await updateLead(lead.id, {
+      // 構建更新對象，只包含有值的欄位
+      const updates: Partial<Lead> = {
         decision,
-        decision_by: userProfile.displayName, // 紀錄審核人姓名
-        reject_reason: decision === Decision.REJECT ? rejectReason : undefined,
-        review_note: reviewNote,
-        // LeadStatus is now properly imported and used here
-        status: decision === Decision.REJECT ? LeadStatus.REJECTED : (decision === Decision.ACCEPT ? LeadStatus.CONTACTED : lead.status)
-      }, AuditAction.DECISION);
+        decision_by: userProfile.displayName,
+        review_note: reviewNote || null,
+        status: decision === Decision.REJECT 
+          ? LeadStatus.REJECTED 
+          : (decision === Decision.ACCEPT ? LeadStatus.CONTACTED : lead.status)
+      };
+      
+      // 只有在拒絕時才設置 reject_reason
+      if (decision === Decision.REJECT) {
+        updates.reject_reason = rejectReason;
+      } else {
+        // 如果不是拒絕，清除 reject_reason
+        updates.reject_reason = null;
+      }
+      
+      console.log(`📤 更新審核決定: ${lead.id}`, updates);
+      
+      await updateLead(lead.id, updates, AuditAction.DECISION);
+      
+      console.log(`✅ 審核決定更新成功: ${lead.id}`);
+      
       onSuccess();
       onClose();
-    } catch (err) {
-      alert('儲存失敗');
+    } catch (err: any) {
+      console.error('❌ 審核決定更新失敗:', err);
+      alert(`儲存失敗：${err?.message || '未知錯誤'}`);
     } finally {
       setLoading(false);
     }
