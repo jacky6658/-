@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Role, UserProfile } from '../types';
-import { LayoutGrid, ClipboardList, CheckSquare, History, Users, Download, LogOut, X } from 'lucide-react';
+import { LayoutGrid, ClipboardList, CheckSquare, History, Users, Download, Database, LogOut, X } from 'lucide-react';
 
 interface SidebarProps {
   activeTab: string;
@@ -22,6 +22,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, profile, onL
     { id: 'import', label: '匯入案件', icon: Download, roles: [Role.ADMIN] },
     { id: 'audit', label: '操作紀錄', icon: History, roles: [Role.ADMIN, Role.REVIEWER] },
     { id: 'members', label: '成員管理', icon: Users, roles: [Role.ADMIN] },
+    { id: 'migration', label: '資料遷移', icon: Database, roles: [Role.ADMIN] },
   ];
 
   const handleItemClick = (id: string) => {

@@ -232,6 +232,28 @@ export const createUserProfile = async (uid: string, email: string, role: Role, 
 };
 
 export const updateUserProfile = async (uid: string, updates: Partial<UserProfile>) => {
+  // 如果使用 API 模式
+  if (useApiMode()) {
+    try {
+      const updated = await apiRequest(`/api/users/${uid}`, {
+        method: 'PUT',
+        body: JSON.stringify(updates),
+      });
+      
+      // 如果更新的是當前用戶，同步更新 localStorage
+      const currentProfile = JSON.parse(localStorage.getItem('caseflow_profile') || 'null');
+      if (currentProfile && currentProfile.uid === uid) {
+        localStorage.setItem('caseflow_profile', JSON.stringify(updated));
+      }
+      
+      return updated;
+    } catch (error) {
+      console.error('API 更新使用者失敗，降級到 localStorage:', error);
+      // 降級到 localStorage
+    }
+  }
+  
+  // localStorage 模式（降級方案）
   const db = getDb();
   if (db[uid]) {
     db[uid] = { ...db[uid], ...updates };

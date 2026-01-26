@@ -46,13 +46,20 @@ export const apiRequest = async (
   console.log(`🌐 API 請求: ${options.method || 'GET'} ${url}`);
   
   try {
+    // 添加超時處理（10秒）
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    
     const response = await fetch(url, {
       ...options,
+      signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
         ...options.headers,
       },
     });
+    
+    clearTimeout(timeoutId);
 
     console.log(`📡 API 響應狀態: ${response.status} ${response.statusText}`);
 
@@ -71,7 +78,11 @@ export const apiRequest = async (
     const data = await response.json();
     console.log(`✅ API 請求成功，返回資料類型:`, Array.isArray(data) ? `陣列 (${data.length} 項)` : typeof data);
     return data;
-  } catch (error) {
+  } catch (error: any) {
+    if (error.name === 'AbortError') {
+      console.error(`❌ API 請求超時（超過 10 秒）:`, url);
+      throw new Error('API 請求超時，請檢查網路連接或後端服務狀態');
+    }
     console.error(`❌ API 請求異常:`, error);
     throw error;
   }

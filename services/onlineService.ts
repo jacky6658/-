@@ -34,19 +34,14 @@ export const getOnlineUsers = (): string[] => {
 
 // 獲取在線用戶資料
 export const getOnlineUserProfiles = async (): Promise<UserProfile[]> => {
-  const onlineUids = getOnlineUsers();
   const allUsers = await getAllUsers();
-  const onlineUsers = allUsers.filter(user => {
-    // 檢查是否在在線列表中，或者用戶資料中標記為在線
-    return (onlineUids.includes(user.uid) || user.isOnline) && user.isActive !== false;
-  });
   
-  // 確保所有在線用戶的資料都標記為在線
-  for (const user of onlineUsers) {
-    if (!user.isOnline) {
-      await updateUserProfile(user.uid, { isOnline: true });
-    }
-  }
+  // 在 API 模式下，直接從後端獲取的用戶資料中過濾在線用戶
+  // 後端已經返回了 isOnline 狀態
+  const onlineUsers = allUsers.filter(user => {
+    // 檢查用戶資料中標記為在線，且用戶是啟用狀態
+    return user.isOnline === true && user.isActive !== false;
+  });
   
   return onlineUsers;
 };
