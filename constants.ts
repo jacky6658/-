@@ -4,6 +4,8 @@ export const PLATFORM_OPTIONS = Object.values(Platform);
 
 export const CONTACT_STATUS_OPTIONS = Object.values(ContactStatus);
 
+export const STATUS_OPTIONS = Object.values(LeadStatus);
+
 export const REJECT_REASON_OPTIONS = Object.values(RejectReason);
 
 export const STATUS_COLORS: Record<LeadStatus, string> = {
@@ -15,6 +17,12 @@ export const STATUS_COLORS: Record<LeadStatus, string> = {
   [LeadStatus.WON]: 'text-emerald-600 bg-emerald-50',
   [LeadStatus.CLOSED]: 'text-gray-600 bg-gray-50',
   [LeadStatus.REJECTED]: 'text-red-600 bg-red-50'
+};
+
+export const DECISION_COLORS: Record<Decision, string> = {
+  [Decision.ACCEPT]: 'text-emerald-600 bg-emerald-50',
+  [Decision.REJECT]: 'text-red-600 bg-red-50',
+  [Decision.PENDING]: 'text-amber-600 bg-amber-50'
 };
 
 // 預設成本名目
