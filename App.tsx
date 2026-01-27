@@ -13,6 +13,7 @@ import AuditLogsPage from './pages/AuditLogsPage';
 import MembersPage from './pages/MembersPage';
 import ImportPage from './pages/ImportPage';
 import MigrationPage from './pages/MigrationPage';
+import AnalyticsPage from './pages/AnalyticsPage';
 import LoginPage from './pages/LoginPage';
 import { subscribeToLeads } from './services/leadService';
 import { Menu, X as XIcon } from 'lucide-react';
@@ -76,9 +77,6 @@ const App: React.FC = () => {
       try {
         const online = await getOnlineUserProfiles();
         setOnlineUsers(online);
-        console.log(`👥 更新在線用戶列表: ${online.length} 個用戶`, 
-          online.map(u => ({ name: u.displayName, hasAvatar: !!u.avatar, status: u.status }))
-        );
       } catch (error) {
         console.error('更新在線用戶列表失敗:', error);
       }
@@ -92,9 +90,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (user) {
-      console.log('👤 用戶已登入，開始載入案件資料...');
       const unsubLeads = subscribeToLeads((loadedLeads) => {
-        console.log('📋 案件資料已更新，共', loadedLeads.length, '筆');
         setLeads(loadedLeads);
       });
       return () => unsubLeads();
@@ -139,6 +135,7 @@ const App: React.FC = () => {
       case 'audit': return <AuditLogsPage leads={leads} userProfile={profile} />;
       case 'members': return <MembersPage userProfile={profile} />;
       case 'import': return <ImportPage userProfile={profile} />;
+      case 'analytics': return <AnalyticsPage leads={leads} userProfile={profile} />;
       case 'migration': return <MigrationPage userProfile={profile} />;
       default: return <LeadsPage leads={leads} userProfile={profile} />;
     }

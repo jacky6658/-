@@ -14,20 +14,6 @@ const saveDb = (db: Record<string, UserProfile>) => localStorage.setItem(STORAGE
 const fetchUsersFromApi = async (): Promise<Record<string, UserProfile>> => {
   try {
     const users = await apiRequest('/api/users');
-    console.log(`📥 從 API 獲取用戶資料:`, {
-      count: Object.keys(users).length,
-      users: Object.keys(users).map(uid => {
-        const u = users[uid];
-        return {
-          uid,
-          name: u.displayName,
-          isOnline: u.isOnline,
-          hasAvatar: !!u.avatar,
-          avatarSize: u.avatar ? `${Math.round(u.avatar.length / 1024)}KB` : '無',
-          status: u.status || '無狀態'
-        };
-      })
-    });
     return users;
   } catch (error) {
     console.error('從 API 獲取使用者失敗，降級到 localStorage:', error);
@@ -128,19 +114,6 @@ export const getAllUsers = async (): Promise<UserProfile[]> => {
     try {
       const users = await fetchUsersFromApi();
       const userList = Object.values(users).filter(u => u.isActive !== false);
-      
-      // 調試：檢查用戶資料是否包含 avatar 和 status
-      if (userList.length > 0) {
-        const sampleUser = userList[0];
-        console.log(`👥 獲取用戶列表: 總共 ${userList.length} 個用戶`, {
-          sampleUser: {
-            uid: sampleUser.uid,
-            displayName: sampleUser.displayName,
-            hasAvatar: !!sampleUser.avatar,
-            status: sampleUser.status || '無狀態'
-          }
-        });
-      }
       
       // 如果 API 返回空陣列，降級到 localStorage（可能是資料庫還沒有用戶資料）
       if (userList.length === 0) {
@@ -296,21 +269,9 @@ export const updateUserProfile = async (uid: string, updates: Partial<UserProfil
   // 如果使用 API 模式
   if (useApiMode()) {
     try {
-      console.log(`📤 更新用戶資料到後端: ${uid}`, {
-        displayName: updates.displayName,
-        avatar: updates.avatar ? '有頭貼' : '無頭貼',
-        status: updates.status || '無狀態'
-      });
-      
       const updated = await apiRequest(`/api/users/${uid}`, {
         method: 'PUT',
         body: JSON.stringify(updates),
-      });
-      
-      console.log(`✅ 用戶資料更新成功:`, {
-        displayName: updated.displayName,
-        avatar: updated.avatar ? '有頭貼' : '無頭貼',
-        status: updated.status || '無狀態'
       });
       
       // 如果更新的是當前用戶，同步更新 localStorage

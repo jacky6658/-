@@ -6,24 +6,6 @@ import { Platform, Lead } from "../types";
 // Vite 使用 import.meta.env 來讀取環境變數
 // 支援多種環境變數名稱：VITE_API_KEY, GEMINI_API_KEY, GOOGLE_API_KEY
 const getAiClient = () => {
-  // 調試：檢查所有可能的環境變數
-  const envVars = {
-    'import.meta.env.VITE_API_KEY': import.meta.env.VITE_API_KEY,
-    'import.meta.env.GEMINI_API_KEY': import.meta.env.GEMINI_API_KEY,
-    'import.meta.env.GOOGLE_API_KEY': import.meta.env.GOOGLE_API_KEY,
-    'process.env.API_KEY': typeof process !== 'undefined' ? process.env?.API_KEY : undefined,
-    'process.env.GEMINI_API_KEY': typeof process !== 'undefined' ? process.env?.GEMINI_API_KEY : undefined,
-    'process.env.GOOGLE_API_KEY': typeof process !== 'undefined' ? process.env?.GOOGLE_API_KEY : undefined,
-  };
-  
-  console.log('🔍 檢查 API Key 環境變數:', {
-    ...envVars,
-    '有 VITE_API_KEY': !!import.meta.env.VITE_API_KEY,
-    '有 GEMINI_API_KEY': !!import.meta.env.GEMINI_API_KEY,
-    'VITE_API_KEY 長度': import.meta.env.VITE_API_KEY?.length || 0,
-    'GEMINI_API_KEY 長度': import.meta.env.GEMINI_API_KEY?.length || 0,
-  });
-  
   const apiKey = 
     import.meta.env.VITE_API_KEY || 
     import.meta.env.GEMINI_API_KEY || 
@@ -33,11 +15,8 @@ const getAiClient = () => {
     (typeof process !== 'undefined' && process.env?.GOOGLE_API_KEY);
   
   if (!apiKey) {
-    console.error('❌ API Key 未找到。環境變數狀態:', envVars);
     throw new Error('請設置 API Key。請在 .env 文件中設置 VITE_API_KEY 或 GEMINI_API_KEY');
   }
-  
-  console.log('✅ API Key 已找到，長度:', apiKey.length, '前 10 個字符:', apiKey.substring(0, 10) + '...');
   
   return new GoogleGenAI({ apiKey });
 };

@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Lead, Platform, ContactStatus, LeadStatus, Role, ProgressUpdate, ChangeHistory } from '../types';
+import { Lead, Platform, ContactStatus, LeadStatus, Role, ProgressUpdate, ChangeHistory, CostRecord, ProfitRecord } from '../types';
 import { CONTACT_STATUS_OPTIONS, PLATFORM_OPTIONS } from '../constants';
-import { X, Upload, Sparkles, User, Loader2, Info, Plus, MessageSquare, Calendar, History, TrendingUp, Camera, Link as LinkIcon } from 'lucide-react';
+import { X, Upload, Sparkles, User, Loader2, Info, Plus, MessageSquare, Calendar, History, TrendingUp, Camera, Link as LinkIcon, Image as ImageIcon, DollarSign, TrendingDown, FileText } from 'lucide-react';
 import { extractLeadFromImage } from '../services/aiService';
 import { addProgressUpdate } from '../services/leadService';
 
@@ -15,7 +15,15 @@ interface LeadModalProps {
   userName: string;
 }
 
-const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initialData, userRole, userName }) => {
+const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initialData: propInitialData, userRole, userName }) => {
+  // 使用內部狀態來管理 initialData，這樣可以在添加進度更新後立即更新
+  const [initialData, setInitialData] = useState<Lead | null>(propInitialData || null);
+  
+  // 當 propInitialData 改變時，更新內部狀態
+  useEffect(() => {
+    setInitialData(propInitialData || null);
+  }, [propInitialData]);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
   const aiFileInputRef = useRef<HTMLInputElement>(null);
   const aiDropZoneRef = useRef<HTMLDivElement>(null);
@@ -27,6 +35,9 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
   const [progressContent, setProgressContent] = useState('');
   const [isAddingProgress, setIsAddingProgress] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [progressAttachments, setProgressAttachments] = useState<string[]>([]); // 進度更新的附件
+  const [progressUrlInput, setProgressUrlInput] = useState(''); // 進度更新的網址輸入
+  const progressFileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState<Partial<Lead>>({
     platform: Platform.FB,
     contact_status: ContactStatus.UNRESPONDED,
@@ -46,6 +57,9 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
 
   useEffect(() => {
     if (initialData) {
+      // 更新內部狀態
+      setInitialData(initialData);
+      
       setFormData({
         ...initialData,
         // 確保所有可能為 null 的欄位都轉換為空字符串
@@ -80,6 +94,8 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
       setIsAiFilled(false);
     }
     setProgressContent('');
+    setProgressAttachments([]);
+    setProgressUrlInput('');
     setShowHistory(false);
   }, [initialData, isOpen]);
 
@@ -271,19 +287,247 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
   };
 
   const handleAddProgress = async () => {
-    if (!progressContent.trim() || !initialData?.id) return;
+    // 必須有內容或附件才能提交
+    if ((!progressContent.trim() && progressAttachments.length === 0) || !initialData?.id) {
+      if (progressAttachments.length > 0 && !progressContent.trim()) {
+        alert('請輸入進度內容或移除附件');
+      }
+      return;
+    }
+    
     setIsAddingProgress(true);
     try {
-      await addProgressUpdate(initialData.id, progressContent);
-      setProgressContent('');
-      // 觸發重新載入，通過提交空更新來刷新數據
-      const updatedData = { ...formData };
-      onSubmit(updatedData);
+      console.log('📤 添加進度更新:', { 
+        content: progressContent, 
+        attachmentsCount: progressAttachments.length,
+        leadId: initialData.id
+      });
+      
+      const progressUpdate = await addProgressUpdate(
+        initialData.id, 
+        progressContent.trim() || '', // 確保內容不為空（即使只有附件也要有內容）
+        progressAttachments.length > 0 ? progressAttachments : undefined
+      );
+      
+      console.log('✅ 進度更新已創建:', progressUpdate);
+      
+      // 更新本地狀態，立即顯示新的進度更新
+      if (progressUpdate && initialData) {
+        const updatedProgressUpdates = [
+          progressUpdate,
+          ...(initialData.progress_updates || [])
+        ];
+        
+        console.log('🔄 更新進度列表，總共:', updatedProgressUpdates.length, '筆');
+        
+        // 更新內部 initialData 狀態，立即顯示新的進度更新
+        const updatedLead = {
+          ...initialData,
+          progress_updates: updatedProgressUpdates
+        };
+        setInitialData(updatedLead);
+        
+        console.log('📋 更新後的 initialData:', {
+          id: updatedLead.id,
+          progressUpdatesCount: updatedLead.progress_updates?.length || 0
+        });
+        
+        // 清空輸入框
+        setProgressContent('');
+        setProgressAttachments([]);
+        setProgressUrlInput('');
+        
+        // 觸發父組件更新，讓它知道數據已改變（但不關閉 Modal）
+        // 只更新 progress_updates，不觸發完整的表單提交
+        onSubmit({ progress_updates: updatedProgressUpdates });
+      } else {
+        console.warn('⚠️ 進度更新創建失敗或沒有 initialData');
+      }
     } catch (err) {
-      alert('添加進度更新失敗');
+      console.error('❌ 添加進度更新失敗:', err);
+      alert('添加進度更新失敗: ' + (err instanceof Error ? err.message : '未知錯誤'));
     } finally {
       setIsAddingProgress(false);
     }
+  };
+
+  // 處理進度更新的圖片上傳
+  const handleProgressFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const files = e.target.files;
+    if (!files) return;
+
+    Array.from(files).forEach((file: File) => {
+      // 檢查檔案類型
+      if (!file.type.startsWith('image/')) {
+        alert('請選擇圖片檔案');
+        return;
+      }
+      // 檢查檔案大小（限制 5MB）
+      if (file.size > 5 * 1024 * 1024) {
+        alert('圖片大小不能超過 5MB');
+        return;
+      }
+      
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result as string;
+        setProgressAttachments(prev => [...prev, base64String]);
+      };
+      reader.readAsDataURL(file);
+    });
+    
+    // 清空 input 值，允許重複選擇同一檔案
+    if (progressFileInputRef.current) {
+      progressFileInputRef.current.value = '';
+    }
+  };
+
+  // 處理進度更新的網址添加
+  const handleAddProgressUrl = () => {
+    if (!progressUrlInput.trim()) return;
+    setProgressAttachments(prev => [...prev, progressUrlInput.trim()]);
+    setProgressUrlInput('');
+  };
+
+  // 移除進度更新的附件
+  const removeProgressAttachment = (index: number) => {
+    setProgressAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // 成本和利潤記錄狀態
+  const [costItemName, setCostItemName] = useState('');
+  const [costAmount, setCostAmount] = useState('');
+  const [costNote, setCostNote] = useState('');
+  const [profitItemName, setProfitItemName] = useState('');
+  const [profitAmount, setProfitAmount] = useState('');
+  const [profitNote, setProfitNote] = useState('');
+  const contractFileInputRef = useRef<HTMLInputElement>(null);
+
+  // 添加成本記錄
+  const handleAddCost = () => {
+    if (!costItemName.trim() || !costAmount || !initialData?.id) return;
+    const amount = parseFloat(costAmount);
+    if (isNaN(amount) || amount <= 0) {
+      alert('請輸入有效的金額');
+      return;
+    }
+
+    const newCost: CostRecord = {
+      id: 'cost_' + Math.random().toString(36).substr(2, 9),
+      lead_id: initialData.id,
+      item_name: costItemName.trim(),
+      amount: amount,
+      author_uid: userRole === Role.ADMIN ? 'admin' : 'user',
+      author_name: userName,
+      created_at: new Date().toISOString(),
+      note: costNote.trim() || undefined
+    };
+
+    const updatedCosts = [...(initialData.cost_records || []), newCost];
+    const updatedLead = { ...initialData, cost_records: updatedCosts };
+    setInitialData(updatedLead);
+    onSubmit({ cost_records: updatedCosts });
+
+    setCostItemName('');
+    setCostAmount('');
+    setCostNote('');
+  };
+
+  // 添加利潤記錄
+  const handleAddProfit = () => {
+    if (!profitItemName.trim() || !profitAmount || !initialData?.id) return;
+    const amount = parseFloat(profitAmount);
+    if (isNaN(amount) || amount <= 0) {
+      alert('請輸入有效的金額');
+      return;
+    }
+
+    const newProfit: ProfitRecord = {
+      id: 'profit_' + Math.random().toString(36).substr(2, 9),
+      lead_id: initialData.id,
+      item_name: profitItemName.trim(),
+      amount: amount,
+      author_uid: userRole === Role.ADMIN ? 'admin' : 'user',
+      author_name: userName,
+      created_at: new Date().toISOString(),
+      note: profitNote.trim() || undefined
+    };
+
+    const updatedProfits = [...(initialData.profit_records || []), newProfit];
+    const updatedLead = { ...initialData, profit_records: updatedProfits };
+    setInitialData(updatedLead);
+    onSubmit({ profit_records: updatedProfits });
+
+    setProfitItemName('');
+    setProfitAmount('');
+    setProfitNote('');
+  };
+
+  // 處理合約文件上傳
+  const handleContractUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const files = e.target.files;
+    if (!files) return;
+
+    Array.from(files).forEach((file: File) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result as string;
+        const updatedContracts = [...(formData.contracts || []), base64String];
+        setFormData(prev => ({ ...prev, contracts: updatedContracts }));
+      };
+      reader.readAsDataURL(file);
+    });
+
+    if (contractFileInputRef.current) {
+      contractFileInputRef.current.value = '';
+    }
+  };
+
+  const removeContract = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      contracts: (prev.contracts || []).filter((_, i) => i !== index)
+    }));
+  };
+
+  // 刪除進度更新（僅 Admin）
+  const handleDeleteProgress = (progressId: string) => {
+    if (userRole !== Role.ADMIN) return;
+    if (!window.confirm('確定要刪除此進度更新嗎？')) return;
+    
+    if (!initialData?.id) return;
+    const updatedProgress = (initialData.progress_updates || []).filter(p => p.id !== progressId);
+    const updatedLead = { ...initialData, progress_updates: updatedProgress };
+    setInitialData(updatedLead);
+    onSubmit({ progress_updates: updatedProgress });
+  };
+
+  // 刪除成本記錄（僅 Admin）
+  const handleDeleteCost = (costId: string) => {
+    if (userRole !== Role.ADMIN) return;
+    if (!window.confirm('確定要刪除此成本記錄嗎？')) return;
+    
+    if (!initialData?.id) return;
+    const updatedCosts = (initialData.cost_records || []).filter(c => c.id !== costId);
+    const updatedLead = { ...initialData, cost_records: updatedCosts };
+    setInitialData(updatedLead);
+    onSubmit({ cost_records: updatedCosts });
+  };
+
+  // 刪除利潤記錄（僅 Admin）
+  const handleDeleteProfit = (profitId: string) => {
+    if (userRole !== Role.ADMIN) return;
+    if (!window.confirm('確定要刪除此利潤記錄嗎？')) return;
+    
+    if (!initialData?.id) return;
+    const updatedProfits = (initialData.profit_records || []).filter(p => p.id !== profitId);
+    const updatedLead = { ...initialData, profit_records: updatedProfits };
+    setInitialData(updatedLead);
+    onSubmit({ profit_records: updatedProfits });
   };
 
   const formatDate = (dateString: string) => {
@@ -462,29 +706,36 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
               </div>
             )}
 
-            {/* 基本欄位 */}
-            <section className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="space-y-2">
-                <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">來源平台</label>
-                <select 
-                  className={`w-full rounded-2xl border-2 p-4 font-black transition-all appearance-none ${isAiFilled ? 'border-indigo-200 bg-indigo-50/30' : 'border-slate-100 bg-slate-50 focus:bg-white focus:border-indigo-500'} text-slate-800`}
-                  value={formData.platform}
-                  onChange={(e) => setFormData({ ...formData, platform: e.target.value as Platform })}
-                >
-                  {PLATFORM_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                </select>
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">對方 ID / 名稱</label>
-                <input 
-                  type="text" 
-                  placeholder="例如：王小明"
-                  className={`w-full rounded-2xl border-2 p-4 font-bold transition-all ${isAiFilled ? 'border-indigo-200 bg-indigo-50/30' : 'border-slate-100 bg-slate-50 focus:bg-white focus:border-indigo-500'} text-slate-800`}
-                  value={formData.platform_id || ''}
-                  onChange={(e) => setFormData({ ...formData, platform_id: e.target.value })}
-                />
-              </div>
-            </section>
+                {/* 基本欄位 */}
+                <section className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">來源平台</label>
+                    <select 
+                      className={`w-full rounded-2xl border-2 p-4 font-black transition-all appearance-none ${isAiFilled ? 'border-indigo-200 bg-indigo-50/30' : 'border-slate-100 bg-slate-50 focus:bg-white focus:border-indigo-500'} text-slate-800`}
+                      value={formData.platform}
+                      onChange={(e) => setFormData({ ...formData, platform: e.target.value as Platform })}
+                    >
+                      {PLATFORM_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">對方 ID / 名稱</label>
+                      {initialData?.case_code && (
+                        <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full">
+                          {initialData.case_code}
+                        </span>
+                      )}
+                    </div>
+                    <input 
+                      type="text" 
+                      placeholder="例如：王小明"
+                      className={`w-full rounded-2xl border-2 p-4 font-bold transition-all ${isAiFilled ? 'border-indigo-200 bg-indigo-50/30' : 'border-slate-100 bg-slate-50 focus:bg-white focus:border-indigo-500'} text-slate-800`}
+                      value={formData.platform_id || ''}
+                      onChange={(e) => setFormData({ ...formData, platform_id: e.target.value })}
+                    />
+                  </div>
+                </section>
 
             {/* 時間與聯絡 */}
             <section className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -574,18 +825,100 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
                 </div>
                 
                 {/* 添加進度更新 */}
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <textarea
-                    rows={2}
+                    rows={3}
                     placeholder="記錄案件進度..."
                     className="w-full rounded-xl border-2 border-emerald-200 bg-white p-3 text-sm font-medium focus:ring-2 focus:ring-emerald-500 transition-all resize-none"
                     value={progressContent}
                     onChange={(e) => setProgressContent(e.target.value)}
+                    onKeyDown={(e) => {
+                      // 阻止 Enter 鍵觸發表單提交（Shift+Enter 可以換行）
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }
+                    }}
                   />
+                  
+                  {/* 附件上傳區域 */}
+                  <div className="space-y-2">
+                    {/* 網址輸入 */}
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={progressUrlInput}
+                        onChange={(e) => setProgressUrlInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddProgressUrl(); } }}
+                        placeholder="貼上網址..."
+                        className="flex-1 rounded-xl border-2 border-emerald-200 bg-white p-2 text-sm font-medium focus:ring-2 focus:ring-emerald-500 transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddProgressUrl}
+                        disabled={!progressUrlInput.trim()}
+                        className="px-3 py-2 bg-emerald-600 text-white rounded-xl font-black text-xs hover:bg-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                      >
+                        <LinkIcon size={14} />
+                        添加網址
+                      </button>
+                    </div>
+                    
+                    {/* 圖片上傳按鈕 */}
+                    <button
+                      type="button"
+                      onClick={() => progressFileInputRef.current?.click()}
+                      className="w-full px-4 py-2 bg-emerald-50 border-2 border-emerald-200 text-emerald-700 rounded-xl font-black text-sm hover:bg-emerald-100 transition-all flex items-center justify-center gap-2"
+                    >
+                      <ImageIcon size={16} />
+                      上傳圖片
+                    </button>
+                    <input
+                      type="file"
+                      ref={progressFileInputRef}
+                      className="hidden"
+                      accept="image/*"
+                      multiple
+                      onChange={handleProgressFileUpload}
+                    />
+                    
+                    {/* 顯示已添加的附件 */}
+                    {progressAttachments.length > 0 && (
+                      <div className="grid grid-cols-4 gap-2">
+                        {progressAttachments.map((attachment, index) => (
+                          <div key={index} className="relative group aspect-square rounded-xl overflow-hidden border-2 border-emerald-200">
+                            {attachment.startsWith('data:image') || attachment.startsWith('http') ? (
+                              <img
+                                src={attachment}
+                                alt={`附件 ${index + 1}`}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  // 如果不是圖片，顯示為連結圖標
+                                  e.currentTarget.style.display = 'none';
+                                }}
+                              />
+                            ) : (
+                              <div className="w-full h-full bg-emerald-50 flex items-center justify-center">
+                                <LinkIcon size={20} className="text-emerald-600" />
+                              </div>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => removeProgressAttachment(index)}
+                              className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  
                   <button
                     type="button"
                     onClick={handleAddProgress}
-                    disabled={!progressContent.trim() || isAddingProgress}
+                    disabled={(!progressContent.trim() && progressAttachments.length === 0) || isAddingProgress}
                     className="w-full px-4 py-2 bg-emerald-600 text-white rounded-xl font-black text-sm hover:bg-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
                     {isAddingProgress ? (
@@ -603,12 +936,62 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
                 </div>
 
                 {/* 顯示進度更新列表 */}
-                <div className="space-y-2 max-h-48 overflow-y-auto">
+                <div className="space-y-3 max-h-64 overflow-y-auto">
                   {(initialData.progress_updates || []).map((update: ProgressUpdate) => (
-                    <div key={update.id} className="bg-white/80 rounded-xl p-3 border border-emerald-100">
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="text-sm font-medium text-slate-800 flex-1">{update.content}</p>
-                      </div>
+                    <div key={update.id} className="bg-white/80 rounded-xl p-3 border border-emerald-100 relative group">
+                      {userRole === Role.ADMIN && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteProgress(update.id)}
+                          className="absolute top-2 right-2 bg-red-500 text-white p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all shadow-lg hover:bg-red-600"
+                          title="刪除此進度更新"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                      {update.content && (
+                        <div className="mb-2">
+                          <p className="text-sm font-medium text-slate-800 whitespace-pre-wrap">{update.content}</p>
+                        </div>
+                      )}
+                      
+                      {/* 顯示附件 */}
+                      {update.attachments && update.attachments.length > 0 && (
+                        <div className="grid grid-cols-4 gap-2 mt-2">
+                          {update.attachments.map((attachment, index) => (
+                            <div key={index} className="relative aspect-square rounded-lg overflow-hidden border border-emerald-200">
+                              {attachment.startsWith('data:image') || attachment.startsWith('http') ? (
+                                <a
+                                  href={attachment}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="block w-full h-full"
+                                >
+                                  <img
+                                    src={attachment}
+                                    alt={`附件 ${index + 1}`}
+                                    className="w-full h-full object-cover hover:opacity-80 transition-opacity"
+                                    onError={(e) => {
+                                      // 如果不是圖片，顯示為連結
+                                      e.currentTarget.style.display = 'none';
+                                    }}
+                                  />
+                                </a>
+                              ) : (
+                                <a
+                                  href={attachment}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="w-full h-full bg-emerald-50 flex items-center justify-center hover:bg-emerald-100 transition-colors"
+                                >
+                                  <LinkIcon size={16} className="text-emerald-600" />
+                                </a>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      
                       <div className="flex items-center gap-2 mt-2 text-xs text-emerald-600">
                         <User size={12} />
                         <span className="font-bold">{update.author_name}</span>
@@ -621,6 +1004,209 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
                     <p className="text-sm text-emerald-600/70 text-center py-4">尚無進度更新記錄</p>
                   )}
                 </div>
+              </section>
+            )}
+
+            {/* 成本和利潤記錄 - 僅在編輯模式下顯示 */}
+            {initialData?.id && (
+              <section className="space-y-6">
+                {/* 成本記錄 */}
+                <div className="p-6 bg-gradient-to-br from-red-50 to-orange-50 rounded-2xl border-2 border-red-200">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-8 h-8 bg-red-600 rounded-xl flex items-center justify-center">
+                      <TrendingDown size={16} className="text-white" />
+                    </div>
+                    <h3 className="text-sm font-black uppercase tracking-widest text-red-900">成本記錄</h3>
+                  </div>
+                  
+                  <div className="space-y-3 mb-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <input
+                        type="text"
+                        placeholder="成本名目（例如：材料費）"
+                        className="rounded-xl border-2 border-red-200 bg-white p-3 text-sm font-medium focus:ring-2 focus:ring-red-500"
+                        value={costItemName}
+                        onChange={(e) => setCostItemName(e.target.value)}
+                      />
+                      <input
+                        type="number"
+                        placeholder="金額"
+                        className="rounded-xl border-2 border-red-200 bg-white p-3 text-sm font-medium focus:ring-2 focus:ring-red-500"
+                        value={costAmount}
+                        onChange={(e) => setCostAmount(e.target.value)}
+                        min="0"
+                        step="0.01"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddCost}
+                        disabled={!costItemName.trim() || !costAmount}
+                        className="px-4 py-3 bg-red-600 text-white rounded-xl font-black text-sm hover:bg-red-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Plus size={16} className="inline mr-2" />
+                        添加成本
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="備註（選填）"
+                      className="w-full rounded-xl border-2 border-red-200 bg-white p-3 text-sm font-medium focus:ring-2 focus:ring-red-500"
+                      value={costNote}
+                      onChange={(e) => setCostNote(e.target.value)}
+                    />
+                  </div>
+
+                  {/* 成本記錄列表 */}
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {(initialData.cost_records || []).map((cost: CostRecord) => (
+                      <div key={cost.id} className="bg-white/80 rounded-xl p-3 border border-red-100 relative group">
+                        {userRole === Role.ADMIN && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCost(cost.id)}
+                            className="absolute top-2 right-2 bg-red-500 text-white p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all shadow-lg hover:bg-red-600"
+                            title="刪除此成本記錄"
+                          >
+                            <X size={14} />
+                          </button>
+                        )}
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-bold text-slate-800">{cost.item_name}</p>
+                            {cost.note && <p className="text-xs text-slate-500 mt-1">{cost.note}</p>}
+                            <p className="text-xs text-slate-400 mt-1">{cost.author_name} • {formatDate(cost.created_at)}</p>
+                          </div>
+                          <p className="text-lg font-black text-red-600">${cost.amount.toLocaleString()}</p>
+                        </div>
+                      </div>
+                    ))}
+                    {(!initialData.cost_records || initialData.cost_records.length === 0) && (
+                      <p className="text-sm text-red-600/70 text-center py-4">尚無成本記錄</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* 利潤記錄 */}
+                <div className="p-6 bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl border-2 border-green-200">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-8 h-8 bg-green-600 rounded-xl flex items-center justify-center">
+                      <TrendingUp size={16} className="text-white" />
+                    </div>
+                    <h3 className="text-sm font-black uppercase tracking-widest text-green-900">利潤記錄</h3>
+                  </div>
+                  
+                  <div className="space-y-3 mb-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <input
+                        type="text"
+                        placeholder="利潤名目（例如：專案收入）"
+                        className="rounded-xl border-2 border-green-200 bg-white p-3 text-sm font-medium focus:ring-2 focus:ring-green-500"
+                        value={profitItemName}
+                        onChange={(e) => setProfitItemName(e.target.value)}
+                      />
+                      <input
+                        type="number"
+                        placeholder="金額"
+                        className="rounded-xl border-2 border-green-200 bg-white p-3 text-sm font-medium focus:ring-2 focus:ring-green-500"
+                        value={profitAmount}
+                        onChange={(e) => setProfitAmount(e.target.value)}
+                        min="0"
+                        step="0.01"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddProfit}
+                        disabled={!profitItemName.trim() || !profitAmount}
+                        className="px-4 py-3 bg-green-600 text-white rounded-xl font-black text-sm hover:bg-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Plus size={16} className="inline mr-2" />
+                        添加利潤
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="備註（選填）"
+                      className="w-full rounded-xl border-2 border-green-200 bg-white p-3 text-sm font-medium focus:ring-2 focus:ring-green-500"
+                      value={profitNote}
+                      onChange={(e) => setProfitNote(e.target.value)}
+                    />
+                  </div>
+
+                  {/* 利潤記錄列表 */}
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {(initialData.profit_records || []).map((profit: ProfitRecord) => (
+                      <div key={profit.id} className="bg-white/80 rounded-xl p-3 border border-green-100 relative group">
+                        {userRole === Role.ADMIN && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteProfit(profit.id)}
+                            className="absolute top-2 right-2 bg-red-500 text-white p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all shadow-lg hover:bg-red-600"
+                            title="刪除此利潤記錄"
+                          >
+                            <X size={14} />
+                          </button>
+                        )}
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-bold text-slate-800">{profit.item_name}</p>
+                            {profit.note && <p className="text-xs text-slate-500 mt-1">{profit.note}</p>}
+                            <p className="text-xs text-slate-400 mt-1">{profit.author_name} • {formatDate(profit.created_at)}</p>
+                          </div>
+                          <p className="text-lg font-black text-green-600">${profit.amount.toLocaleString()}</p>
+                        </div>
+                      </div>
+                    ))}
+                    {(!initialData.profit_records || initialData.profit_records.length === 0) && (
+                      <p className="text-sm text-green-600/70 text-center py-4">尚無利潤記錄</p>
+                    )}
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {/* 合約文件 - 僅在編輯模式下顯示 */}
+            {initialData?.id && (
+              <section className="space-y-4">
+                <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">
+                  <FileText size={14} />
+                  合約文件
+                </label>
+                <div className="grid grid-cols-4 md:grid-cols-6 gap-4">
+                  {(formData.contracts || []).map((contract, index) => (
+                    <div key={index} className="relative group aspect-square rounded-2xl overflow-hidden border-2 border-indigo-200 shadow-sm transition-all hover:shadow-lg">
+                      {contract.startsWith('data:image') ? (
+                        <img src={contract} alt="Contract" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full bg-indigo-50 flex items-center justify-center">
+                          <FileText size={32} className="text-indigo-400" />
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => removeContract(index)}
+                        className="absolute top-2 right-2 bg-red-500 text-white p-1.5 rounded-xl opacity-0 group-hover:opacity-100 transition-all shadow-xl active:scale-90"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => contractFileInputRef.current?.click()}
+                    className="flex flex-col items-center justify-center aspect-square rounded-2xl border-2 border-dashed border-indigo-200 bg-indigo-50 text-indigo-400 hover:border-indigo-400 hover:bg-indigo-100 transition-all group"
+                  >
+                    <FileText size={24} className="group-hover:scale-110 transition-transform" />
+                    <span className="text-[10px] mt-2 font-black uppercase tracking-widest">加合約</span>
+                  </button>
+                </div>
+                <input
+                  type="file"
+                  ref={contractFileInputRef}
+                  className="hidden"
+                  accept="image/*,.pdf,.doc,.docx"
+                  multiple
+                  onChange={handleContractUpload}
+                />
               </section>
             )}
 

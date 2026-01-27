@@ -6,7 +6,7 @@ import LeadModal from '../components/LeadModal';
 import { STATUS_COLORS } from '../constants';
 import { createLead, updateLead, deleteLead } from '../services/leadService';
 import { extractLeadFromImage } from '../services/aiService';
-import { Plus, Search, Edit2, Trash2, Check, X, Loader2, Camera, Clock, UserCheck, Phone, Mail, MapPin, ChevronDown, ChevronUp, MessageSquare } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Check, X, Loader2, Camera, Clock, UserCheck, Phone, Mail, MapPin, ChevronDown, ChevronUp, MessageSquare, Paperclip } from 'lucide-react';
 
 interface LeadsPageProps {
   leads: Lead[];
@@ -138,8 +138,11 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
       await createLead(data);
       setIsModalOpen(false);
       setSelectedLead(null);
+      // 顯示成功訊息
+      alert('✅ 案件已成功新增！');
     } catch (err) {
-      alert('新增失敗');
+      console.error('新增案件失敗:', err);
+      alert('❌ 新增失敗，請稍後再試');
     }
   };
 
@@ -147,15 +150,32 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
     if (!selectedLead?.id) return;
     try {
       await updateLead(selectedLead.id, data);
-      // 等待一下讓數據更新，然後從leads中重新獲取
+      
+      // 如果只更新了 progress_updates，立即更新 selectedLead 以顯示新進度（不關閉 Modal）
+      if (data.progress_updates && Object.keys(data).length === 1) {
+        setSelectedLead(prev => prev ? {
+          ...prev,
+          progress_updates: data.progress_updates
+        } : null);
+        // 進度更新不需要關閉 Modal，也不需要提示（因為已經在進度更新區域顯示了）
+        return;
+      }
+      
+      // 其他更新：等待一下讓數據更新，然後從leads中重新獲取
       setTimeout(() => {
         const updatedLead = leads.find(l => l.id === selectedLead.id);
         if (updatedLead) {
           setSelectedLead(updatedLead);
         }
       }, 100);
+      
+      // 關閉 Modal 並顯示成功訊息
+      setIsModalOpen(false);
+      setSelectedLead(null);
+      alert('✅ 案件已成功更新！');
     } catch (err) {
-      alert('更新失敗');
+      console.error('更新案件失敗:', err);
+      alert('❌ 更新失敗，請稍後再試');
     }
   };
 
@@ -283,8 +303,23 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
                   >
                     <td className="px-4 sm:px-6 py-4 sm:py-6 whitespace-nowrap">
                       <div className="flex flex-col gap-1">
-                        <span className="text-xs font-black text-indigo-600">{lead.platform}</span>
-                        <span className="text-sm font-bold text-slate-900">{lead.platform_id}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-black text-indigo-600">{lead.platform}</span>
+                          {lead.links && lead.links.length > 0 && (
+                            <div className="flex items-center gap-1 text-emerald-600" title={`有 ${lead.links.length} 個附件`}>
+                              <Paperclip size={12} className="text-emerald-500" />
+                              <span className="text-[9px] font-black">{lead.links.length}</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-slate-900">{lead.platform_id}</span>
+                          {lead.case_code && (
+                            <span className="text-[10px] font-black text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                              {lead.case_code}
+                            </span>
+                          )}
+                        </div>
                         <div className="flex items-center gap-1.5 text-slate-400 text-[10px] font-black">
                           <Clock size={10} /> {formatDate(lead.posted_at || lead.created_at)}
                         </div>

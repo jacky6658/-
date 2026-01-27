@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Role, UserProfile } from '../types';
-import { LayoutGrid, ClipboardList, CheckSquare, History, Users, Download, Database, LogOut, X } from 'lucide-react';
+import { LayoutGrid, ClipboardList, CheckSquare, History, Users, Download, Database, LogOut, X, BarChart3 } from 'lucide-react';
 
 interface SidebarProps {
   activeTab: string;
@@ -20,6 +20,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, profile, onL
     { id: 'review', label: '待我審核', icon: CheckSquare, roles: [Role.ADMIN, Role.REVIEWER] },
     { id: 'kanban', label: '流程看板', icon: LayoutGrid, roles: [Role.ADMIN, Role.REVIEWER] },
     { id: 'import', label: '匯入案件', icon: Download, roles: [Role.ADMIN] },
+    { id: 'analytics', label: '財務分析', icon: BarChart3, roles: [Role.ADMIN] },
     { id: 'audit', label: '操作紀錄', icon: History, roles: [Role.ADMIN, Role.REVIEWER] },
     { id: 'members', label: '成員管理', icon: Users, roles: [Role.ADMIN] },
     { id: 'migration', label: '資料遷移', icon: Database, roles: [Role.ADMIN] },
@@ -54,8 +55,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, profile, onL
         {/* 手機版關閉按鈕 */}
         <div className="p-4 sm:p-6 flex items-center justify-between border-b border-slate-800 sm:border-b-0">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center font-bold text-white">C</div>
-            <span className="text-xl font-bold text-white tracking-tight">CaseFlow</span>
+            <div className="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center font-bold text-white text-xs">AI</div>
+            <span className="text-xl font-bold text-white tracking-tight">AI案件管理系統</span>
           </div>
           <button
             onClick={onClose}

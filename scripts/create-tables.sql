@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS users (
 -- 2. 案件表
 CREATE TABLE IF NOT EXISTS leads (
   id TEXT PRIMARY KEY,
+  case_code TEXT, -- 案件編號（例如：aijob-001）
   platform TEXT NOT NULL DEFAULT 'FB',
   platform_id TEXT,
   need TEXT NOT NULL,

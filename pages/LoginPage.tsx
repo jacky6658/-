@@ -82,10 +82,10 @@ const LoginPage: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex flex-col justify-center items-center p-4 sm:p-6">
       <div className="w-full max-w-6xl">
         <div className="text-center mb-6 sm:mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl sm:rounded-3xl shadow-2xl shadow-indigo-200 text-white font-black text-2xl sm:text-3xl mb-3 sm:mb-4 transform hover:scale-105 transition-transform">
-            C
+          <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl sm:rounded-3xl shadow-2xl shadow-indigo-200 text-white font-black text-lg sm:text-xl mb-3 sm:mb-4 transform hover:scale-105 transition-transform">
+            AI
           </div>
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-slate-900 tracking-tight mb-1 sm:mb-2">CaseFlow Cloud</h1>
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-slate-900 tracking-tight mb-1 sm:mb-2">AI案件管理系統</h1>
           <p className="text-slate-500 text-sm sm:text-base md:text-lg px-4">內部協作系統 · 請選擇您的身份</p>
         </div>
 
@@ -165,7 +165,7 @@ const LoginPage: React.FC = () => {
         )}
         
         <div className="mt-8 sm:mt-12 text-center text-[9px] sm:text-[10px] font-black text-slate-300 uppercase tracking-[0.2em] sm:tracking-[0.3em] px-4">
-          CaseFlow Internal Edition v3.0.0
+          AI案件管理系統 v3.0.0
         </div>
       </div>
     </div>

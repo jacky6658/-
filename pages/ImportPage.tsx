@@ -370,51 +370,51 @@ const ImportPage: React.FC<ImportPageProps> = () => {
           </>
         ) : importMode === 'csv' ? (
           <>
-            <div className="bg-amber-50 border-l-4 border-amber-400 p-4 mb-6">
-              <div className="flex gap-3">
-                <AlertCircle size={20} className="text-amber-600 shrink-0" />
-                <div className="text-xs text-amber-800 leading-relaxed">
-                  <p className="font-bold mb-1">CSV 格式提醒：</p>
-                  <p>首行必須包含以下欄位（逗號分隔）：</p>
-                  <p className="font-mono mt-1 bg-white/50 p-1 rounded">platform, platform_id, need, budget_text, posted_at, note, links</p>
-                </div>
-              </div>
+        <div className="bg-amber-50 border-l-4 border-amber-400 p-4 mb-6">
+          <div className="flex gap-3">
+            <AlertCircle size={20} className="text-amber-600 shrink-0" />
+            <div className="text-xs text-amber-800 leading-relaxed">
+              <p className="font-bold mb-1">CSV 格式提醒：</p>
+              <p>首行必須包含以下欄位（逗號分隔）：</p>
+              <p className="font-mono mt-1 bg-white/50 p-1 rounded">platform, platform_id, need, budget_text, posted_at, note, links</p>
             </div>
+          </div>
+        </div>
 
-            <div className="space-y-4">
-              <label className="block text-sm font-semibold text-gray-700">CSV 數據 (Raw Content)</label>
-              <textarea 
-                className="w-full h-64 font-mono text-xs p-4 bg-slate-50 border-gray-200 focus:bg-white focus:ring-2 focus:ring-indigo-500 rounded-xl transition-all"
-                placeholder="platform,platform_id,need,budget_text,posted_at,note,links&#10;FB,user123,想要做官網,50000,2023-10-01,急件,link1;link2"
-                value={csvData}
-                onChange={(e) => setCsvData(e.target.value)}
-              />
-              
-              {importing && (
-                <div className="space-y-2">
-                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-indigo-600 transition-all duration-300" style={{ width: `${progress}%` }}></div>
-                  </div>
-                  <p className="text-xs text-gray-500 text-center">{progress}% 完成</p>
-                </div>
-              )}
+        <div className="space-y-4">
+          <label className="block text-sm font-semibold text-gray-700">CSV 數據 (Raw Content)</label>
+          <textarea 
+            className="w-full h-64 font-mono text-xs p-4 bg-slate-50 border-gray-200 focus:bg-white focus:ring-2 focus:ring-indigo-500 rounded-xl transition-all"
+            placeholder="platform,platform_id,need,budget_text,posted_at,note,links&#10;FB,user123,想要做官網,50000,2023-10-01,急件,link1;link2"
+            value={csvData}
+            onChange={(e) => setCsvData(e.target.value)}
+          />
+          
+          {importing && (
+            <div className="space-y-2">
+              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div className="h-full bg-indigo-600 transition-all duration-300" style={{ width: `${progress}%` }}></div>
+              </div>
+              <p className="text-xs text-gray-500 text-center">{progress}% 完成</p>
+            </div>
+          )}
 
-              <div className="flex items-center justify-between pt-4">
-                {message && (
-                  <div className="flex items-center gap-2 text-sm text-green-600 font-medium">
-                    <CheckCircle size={16} />
-                    {message}
-                  </div>
-                )}
-                <button 
-                  disabled={importing || !csvData}
+          <div className="flex items-center justify-between pt-4">
+            {message && (
+              <div className="flex items-center gap-2 text-sm text-green-600 font-medium">
+                <CheckCircle size={16} />
+                {message}
+              </div>
+            )}
+            <button 
+              disabled={importing || !csvData}
                   onClick={handleCsvImport}
-                  className="ml-auto flex items-center gap-2 bg-slate-900 text-white px-8 py-3 rounded-xl font-bold hover:bg-black transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-xl shadow-slate-200"
-                >
-                  {importing ? '處理中...' : '開始匯入'}
-                </button>
-              </div>
-            </div>
+              className="ml-auto flex items-center gap-2 bg-slate-900 text-white px-8 py-3 rounded-xl font-bold hover:bg-black transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-xl shadow-slate-200"
+            >
+              {importing ? '處理中...' : '開始匯入'}
+            </button>
+          </div>
+        </div>
           </>
         ) : (
           <>

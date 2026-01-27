@@ -59,6 +59,7 @@ export interface UserProfile {
 
 export interface Lead {
   id: string;
+  case_code?: string; // 案件編號（例如：aijob-001）
   contact_status: ContactStatus;
   platform: Platform;
   platform_id: string;
@@ -93,6 +94,13 @@ export interface Lead {
   // 進度更新和歷史記錄
   progress_updates?: ProgressUpdate[]; // 近期進度更新
   change_history?: ChangeHistory[]; // 修改歷史記錄
+  
+  // 成本和利潤記錄
+  cost_records?: CostRecord[]; // 成本記錄
+  profit_records?: ProfitRecord[]; // 利潤記錄
+  
+  // 合約和文件
+  contracts?: string[]; // 合約文件（base64 或 URL）
 }
 
 export enum AuditAction {
@@ -121,6 +129,7 @@ export interface ProgressUpdate {
   author_uid: string;
   author_name: string;
   created_at: string;
+  attachments?: string[]; // 附件（圖片 base64 或網址）
 }
 
 // 修改歷史記錄
@@ -133,4 +142,28 @@ export interface ChangeHistory {
   author_uid: string;
   author_name: string;
   created_at: string;
+}
+
+// 成本記錄
+export interface CostRecord {
+  id: string;
+  lead_id: string;
+  item_name: string; // 成本名目
+  amount: number; // 金額
+  author_uid: string;
+  author_name: string;
+  created_at: string;
+  note?: string; // 備註
+}
+
+// 利潤記錄
+export interface ProfitRecord {
+  id: string;
+  lead_id: string;
+  item_name: string; // 利潤名目
+  amount: number; // 金額
+  author_uid: string;
+  author_name: string;
+  created_at: string;
+  note?: string; // 備註
 }

@@ -18,14 +18,44 @@ const saveLeads = (leads: Lead[]) => {
 const fetchLeadsFromApi = async (): Promise<Lead[]> => {
   try {
     const leads = await apiRequest('/api/leads');
-    console.log('✅ 從 API 獲取案件成功，共', leads?.length || 0, '筆');
     return leads || [];
   } catch (error) {
     console.error('❌ 從 API 獲取案件失敗，降級到 localStorage:', error);
-    const localLeads = getLeads();
-    console.log('📦 localStorage 中有', localLeads.length, '筆案件');
-    return localLeads; // 降級到 localStorage
+    return getLeads(); // 降級到 localStorage
   }
+};
+
+// 生成案件編號（從 aijob-001 開始）
+const generateCaseCode = async (): Promise<string> => {
+  let allLeads: Lead[] = [];
+  
+  // 獲取所有案件
+  if (useApiMode()) {
+    try {
+      allLeads = await fetchLeadsFromApi();
+    } catch (error) {
+      console.error('獲取案件列表失敗，使用 localStorage:', error);
+      allLeads = getLeads();
+    }
+  } else {
+    allLeads = getLeads();
+  }
+  
+  // 找出所有已有的編號
+  const existingCodes = allLeads
+    .map(lead => lead.case_code)
+    .filter(code => code && code.startsWith('aijob-'))
+    .map(code => {
+      const match = code.match(/aijob-(\d+)/);
+      return match ? parseInt(match[1], 10) : 0;
+    });
+  
+  // 找出最大編號
+  const maxNumber = existingCodes.length > 0 ? Math.max(...existingCodes) : 0;
+  
+  // 生成新編號（加1）
+  const nextNumber = maxNumber + 1;
+  return `aijob-${String(nextNumber).padStart(3, '0')}`;
 };
 
 export const createLead = async (leadData: Partial<Lead>) => {
@@ -38,9 +68,13 @@ export const createLead = async (leadData: Partial<Lead>) => {
   const now = new Date().toISOString();
   const id = 'lead_' + Math.random().toString(36).substr(2, 9);
   
+  // 生成案件編號
+  const caseCode = await generateCaseCode();
+  
   const newLead: Lead = {
     ...(leadData as Lead),
     id,
+    case_code: caseCode,
     status: leadData.status || LeadStatus.TO_FILTER,
     decision: leadData.decision || Decision.PENDING,
     priority: leadData.priority || 3,
@@ -174,7 +208,7 @@ export const updateLead = async (id: string, updates: Partial<Lead>, actionType:
 };
 
 // 添加進度更新
-export const addProgressUpdate = async (leadId: string, content: string) => {
+export const addProgressUpdate = async (leadId: string, content: string, attachments?: string[]) => {
   const user = auth.currentUser;
   if (!user) throw new Error('Unauthorized');
 
@@ -184,10 +218,11 @@ export const addProgressUpdate = async (leadId: string, content: string) => {
   const progressUpdate: ProgressUpdate = {
     id: 'progress_' + Math.random().toString(36).substr(2, 9),
     lead_id: leadId,
-    content,
+    content: content || '',
     author_uid: user.uid,
     author_name: authorName,
-    created_at: new Date().toISOString()
+    created_at: new Date().toISOString(),
+    attachments: attachments && attachments.length > 0 ? attachments : undefined
   };
 
   // 如果使用 API 模式
@@ -255,21 +290,15 @@ export const deleteLead = async (id: string) => {
 };
 
 export const subscribeToLeads = (callback: (leads: Lead[]) => void) => {
-  const apiUrl = getApiUrl();
-  console.log('📡 載入案件資料模式:', apiUrl ? `API 模式 (${apiUrl})` : 'localStorage 模式');
-  
   // 如果使用 API 模式，定期輪詢
   if (useApiMode()) {
     const fetchData = async () => {
       try {
         const leads = await fetchLeadsFromApi();
-        console.log('📊 更新案件列表，共', leads.length, '筆');
         callback(leads);
       } catch (error) {
         console.error('❌ 獲取資料失敗:', error);
-        const localLeads = getLeads();
-        console.log('📦 降級到 localStorage，共', localLeads.length, '筆');
-        callback(localLeads); // 降級到 localStorage
+        callback(getLeads()); // 降級到 localStorage
       }
     };
 
@@ -285,7 +314,6 @@ export const subscribeToLeads = (callback: (leads: Lead[]) => void) => {
   // localStorage 模式
   const handler = () => {
     const leads = getLeads();
-    console.log('📦 localStorage 模式：更新案件列表，共', leads.length, '筆');
     callback(leads);
   };
   window.addEventListener('leads_updated', handler);

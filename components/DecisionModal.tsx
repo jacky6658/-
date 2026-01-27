@@ -42,11 +42,7 @@ const DecisionModal: React.FC<DecisionModalProps> = ({ lead, isOpen, onClose, on
         updates.reject_reason = null;
       }
       
-      console.log(`📤 更新審核決定: ${lead.id}`, updates);
-      
       await updateLead(lead.id, updates, AuditAction.DECISION);
-      
-      console.log(`✅ 審核決定更新成功: ${lead.id}`);
       
       onSuccess();
       onClose();
