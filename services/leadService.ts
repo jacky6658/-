@@ -4,7 +4,7 @@ import { Lead, LeadStatus, Decision, AuditAction, ProgressUpdate, ChangeHistory,
 import { logAction } from './auditService';
 import { getUserProfile } from './userService';
 import { apiRequest, useApiMode, getApiUrl } from './apiConfig';
-import { PRO360_COST_ITEM } from '../constants';
+import { PRO360_CONTACT_COST_ITEM } from '../constants';
 
 const STORAGE_KEY = 'caseflow_leads_db';
 
@@ -16,7 +16,7 @@ const saveLeads = (leads: Lead[]) => {
 };
 
 // API 模式：從後端獲取資料
-const fetchLeadsFromApi = async (): Promise<Lead[]> => {
+export const fetchLeadsFromApi = async (): Promise<Lead[]> => {
   try {
     const leads = await apiRequest('/api/leads');
     return leads || [];
@@ -59,7 +59,7 @@ const generateCaseCode = async (): Promise<string> => {
   return `aijob-${String(nextNumber).padStart(3, '0')}`;
 };
 
-// 檢查重複案件
+// 檢查重複案件（嚴格模式：所有條件必須完全一致）
 const checkDuplicateLead = async (leadData: Partial<Lead>): Promise<Lead | null> => {
   let allLeads: Lead[] = [];
   
@@ -75,38 +75,81 @@ const checkDuplicateLead = async (leadData: Partial<Lead>): Promise<Lead | null>
     allLeads = getLeads();
   }
   
-  // 檢查重複的標準：
-  // 1. 相同的 platform + platform_id（最嚴格）
-  // 2. 或者相同的 platform + phone（如果有電話）
-  // 3. 或者相同的 platform + email（如果有郵件）
+  // 標準化輸入數據
   const platform = leadData.platform;
-  const platformId = leadData.platform_id?.trim().toLowerCase();
-  const phone = leadData.phone?.trim();
-  const email = leadData.email?.trim().toLowerCase();
+  const platformId = leadData.platform_id?.trim().toLowerCase() || '';
+  const location = leadData.location?.trim().toLowerCase() || '';
+  const phone = leadData.phone?.trim() || '';
+  const email = leadData.email?.trim().toLowerCase() || '';
+  const need = leadData.need?.trim() || '';
   
+  // 必須有平台和對方ID/名稱才能判斷重複
   if (!platform || !platformId) {
-    return null; // 如果沒有平台和ID，無法判斷重複
+    return null;
   }
   
-  // 查找重複案件
+  // 必須有客戶需求才能判斷重複
+  if (!need) {
+    return null;
+  }
+  
+  // 查找重複案件：所有條件必須完全一致
   const duplicate = allLeads.find(lead => {
-    // 主要匹配：相同的 platform + platform_id
-    if (lead.platform === platform && 
-        lead.platform_id?.trim().toLowerCase() === platformId) {
-      return true;
+    // 1. 平台必須相同
+    if (lead.platform !== platform) {
+      return false;
     }
     
-    // 次要匹配：相同的 platform + phone（如果都有電話）
-    if (phone && lead.platform === platform && lead.phone?.trim() === phone) {
-      return true;
+    // 2. 對方ID/名稱必須完全一致（不區分大小寫）
+    const existingPlatformId = lead.platform_id?.trim().toLowerCase() || '';
+    if (existingPlatformId !== platformId) {
+      return false;
     }
     
-    // 次要匹配：相同的 platform + email（如果都有郵件）
-    if (email && lead.platform === platform && lead.email?.trim().toLowerCase() === email) {
-      return true;
+    // 3. 地點必須完全一致（如果都有地點）
+    const existingLocation = lead.location?.trim().toLowerCase() || '';
+    if (location && existingLocation) {
+      // 如果新數據有地點，現有數據也必須有相同地點
+      if (existingLocation !== location) {
+        return false;
+      }
+    } else if (location || existingLocation) {
+      // 如果只有一方有地點，不匹配
+      return false;
     }
     
-    return false;
+    // 4. 電話必須完全一致（如果都有電話）
+    const existingPhone = lead.phone?.trim() || '';
+    if (phone && existingPhone) {
+      // 如果新數據有電話，現有數據也必須有相同電話
+      if (existingPhone !== phone) {
+        return false;
+      }
+    } else if (phone || existingPhone) {
+      // 如果只有一方有電話，不匹配
+      return false;
+    }
+    
+    // 5. Email必須完全一致（如果都有Email）
+    const existingEmail = lead.email?.trim().toLowerCase() || '';
+    if (email && existingEmail) {
+      // 如果新數據有Email，現有數據也必須有相同Email
+      if (existingEmail !== email) {
+        return false;
+      }
+    } else if (email || existingEmail) {
+      // 如果只有一方有Email，不匹配
+      return false;
+    }
+    
+    // 6. 客戶需求必須完全一致
+    const existingNeed = lead.need?.trim() || '';
+    if (existingNeed !== need) {
+      return false;
+    }
+    
+    // 所有條件都匹配，認為是重複案件
+    return true;
   });
   
   return duplicate || null;
@@ -214,11 +257,13 @@ export const createLead = async (leadData: Partial<Lead>, mergeIfDuplicate: bool
   id = 'lead_' + Math.random().toString(36).substr(2, 9);
   caseCode = await generateCaseCode();
   
+  const finalStatus = leadData.status || LeadStatus.TO_FILTER;
+  
   const newLead: Lead = {
     ...(leadData as Lead),
     id,
     case_code: caseCode,
-    status: leadData.status || LeadStatus.TO_FILTER,
+    status: finalStatus,
     decision: leadData.decision || Decision.PENDING,
     priority: leadData.priority || 3,
     created_by: user.uid,
@@ -315,45 +360,36 @@ export const updateLead = async (id: string, updates: Partial<Lead>, actionType:
       const before = currentLeads.find((l: Lead) => l.id === id);
       if (!before) return;
 
-      const after = {
+      // 構建更新對象，確保不會覆蓋已有的成本/利潤記錄
+      const after: Partial<Lead> = {
         ...before,
         ...updates,
         last_action_by: actorName,
-        // 確保 cost_records 和 profit_records 存在
-        cost_records: updates.cost_records !== undefined ? updates.cost_records : (before.cost_records || []),
-        profit_records: updates.profit_records !== undefined ? updates.profit_records : (before.profit_records || [])
-        // 注意：不包含 updated_at，讓後端統一處理
       };
-
-      // Pro360 自動成本管理
-      if (before.platform === Platform.PRO360) {
-        const newStatus = updates.status !== undefined ? updates.status : before.status;
-        const oldStatus = before.status;
-        const costRecords = after.cost_records || [];
-        const pro360CostIndex = costRecords.findIndex((c: CostRecord) => c.item_name === PRO360_COST_ITEM);
-
-        // 如果狀態變為「已接洽」，且還沒有 Pro360 成本記錄，則添加
-        if (newStatus === LeadStatus.CONTACTED && oldStatus !== LeadStatus.CONTACTED && pro360CostIndex === -1) {
-          const pro360Cost: CostRecord = {
-            id: 'cost_pro360_' + Math.random().toString(36).substr(2, 9),
-            lead_id: id,
-            item_name: PRO360_COST_ITEM,
-            amount: 0, // 預設為 0，用戶可以手動修改
-            author_uid: user.uid,
-            author_name: actorName,
-            created_at: new Date().toISOString(),
-            note: '自動添加：案件已接洽，請輸入實際費用'
-          };
-          after.cost_records = [...costRecords, pro360Cost];
-          console.log('✅ Pro360 案件已接洽，自動添加成本記錄');
-        }
-
-        // 如果狀態變為「已拒絕」，移除 Pro360 成本記錄（可能退費）
-        if (newStatus === LeadStatus.REJECTED && oldStatus !== LeadStatus.REJECTED && pro360CostIndex !== -1) {
-          after.cost_records = costRecords.filter((c: CostRecord, idx: number) => idx !== pro360CostIndex);
-          console.log('✅ Pro360 案件已拒絕，自動移除成本記錄（可能退費）');
-        }
+      
+      // 特殊處理：如果 updates 中明確提供了 cost_records 或 profit_records，使用提供的值
+      // 否則保留 before 中的值（避免覆蓋）
+      if (updates.cost_records !== undefined) {
+        after.cost_records = updates.cost_records;
+      } else {
+        after.cost_records = before.cost_records || [];
       }
+      
+      if (updates.profit_records !== undefined) {
+        after.profit_records = updates.profit_records;
+      } else {
+        after.profit_records = before.profit_records || [];
+      }
+      
+      // 確保 progress_updates 和 change_history 不會被意外覆蓋
+      if (updates.progress_updates === undefined) {
+        after.progress_updates = before.progress_updates || [];
+      }
+      if (updates.change_history === undefined) {
+        after.change_history = before.change_history || [];
+      }
+
+      // Pro360 自動成本管理已移除，改為人工處理
 
       // 記錄欄位變更
       const fieldChanges = recordFieldChanges(before, after, user.uid, actorName);
@@ -384,42 +420,18 @@ export const updateLead = async (id: string, updates: Partial<Lead>, actionType:
   if (index === -1) return;
 
   const before = { ...leads[index] };
+  // 確保 cost_records 和 profit_records 正確處理
   const after = {
     ...leads[index],
     ...updates,
     last_action_by: actorName,
-    updated_at: new Date().toISOString()
+    updated_at: new Date().toISOString(),
+    // 確保 cost_records 和 profit_records 存在
+    cost_records: updates.cost_records !== undefined ? updates.cost_records : (before.cost_records || []),
+    profit_records: updates.profit_records !== undefined ? updates.profit_records : (before.profit_records || [])
   };
 
-  // Pro360 自動成本管理
-  if (before.platform === Platform.PRO360) {
-    const newStatus = updates.status !== undefined ? updates.status : before.status;
-    const oldStatus = before.status;
-    const costRecords = after.cost_records || [];
-    const pro360CostIndex = costRecords.findIndex((c: CostRecord) => c.item_name === PRO360_COST_ITEM);
-
-    // 如果狀態變為「已接洽」，且還沒有 Pro360 成本記錄，則添加
-    if (newStatus === LeadStatus.CONTACTED && oldStatus !== LeadStatus.CONTACTED && pro360CostIndex === -1) {
-      const pro360Cost: CostRecord = {
-        id: 'cost_pro360_' + Math.random().toString(36).substr(2, 9),
-        lead_id: id,
-        item_name: PRO360_COST_ITEM,
-        amount: 0, // 預設為 0，用戶可以手動修改
-        author_uid: user.uid,
-        author_name: actorName,
-        created_at: new Date().toISOString(),
-        note: '自動添加：案件已接洽，請輸入實際費用'
-      };
-      after.cost_records = [...costRecords, pro360Cost];
-      console.log('✅ Pro360 案件已接洽，自動添加成本記錄');
-    }
-
-    // 如果狀態變為「已拒絕」，移除 Pro360 成本記錄（可能退費）
-    if (newStatus === LeadStatus.REJECTED && oldStatus !== LeadStatus.REJECTED && pro360CostIndex !== -1) {
-      after.cost_records = costRecords.filter((c: CostRecord, idx: number) => idx !== pro360CostIndex);
-      console.log('✅ Pro360 案件已拒絕，自動移除成本記錄（可能退費）');
-    }
-  }
+  // Pro360 自動成本管理已移除，改為人工處理
 
   // 記錄欄位變更
   const fieldChanges = recordFieldChanges(before, after, user.uid, actorName);
@@ -568,27 +580,157 @@ export const addCostRecord = async (leadId: string, record: Omit<CostRecord, 'id
   if (useApiMode()) {
     try {
       const currentLeads = await fetchLeadsFromApi();
+      console.log('🔍 獲取案件列表，共', currentLeads.length, '筆，尋找案件 ID:', leadId);
+      
       const lead = currentLeads.find((l: Lead) => l.id === leadId);
-      if (!lead) throw new Error('Lead not found');
+      if (!lead) {
+        console.error('❌ 找不到案件:', {
+          leadId,
+          availableIds: currentLeads.slice(0, 5).map(l => l.id),
+          totalLeads: currentLeads.length
+        });
+        throw new Error(`Lead not found: ${leadId}`);
+      }
+      
       const updatedCosts = [...(lead.cost_records || []), newRecord];
-      await apiRequest(`/api/leads/${leadId}`, {
-        method: 'PUT',
-        body: JSON.stringify({ cost_records: updatedCosts }),
+      
+      console.log('📤 發送成本記錄到後端:', {
+        leadId,
+        leadPlatform: lead.platform,
+        leadPlatformId: lead.platform_id,
+        costRecord: newRecord,
+        currentCostsCount: (lead.cost_records || []).length,
+        updatedCostsCount: updatedCosts.length
       });
+      
+      // 只更新 cost_records，避免覆蓋其他欄位
+      const response = await apiRequest(`/api/leads/${leadId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ 
+          cost_records: updatedCosts,
+          // 明確指定只更新 cost_records，不更新其他欄位
+        }),
+      });
+      
+      console.log('📥 後端回應:', response);
+      
+      // 驗證後端返回的數據
+      if (response && response.cost_records) {
+        const responseCostIds = response.cost_records.map((c: CostRecord) => c.id);
+        const expectedCostId = newRecord.id;
+        if (!responseCostIds.includes(expectedCostId)) {
+          console.error('❌ 後端返回的數據中缺少新添加的成本記錄:', {
+            expectedId: expectedCostId,
+            responseIds: responseCostIds,
+            responseCosts: response.cost_records
+          });
+        }
+      }
+      
+      // 驗證保存是否成功：重新獲取數據確認
+      try {
+        // 等待一小段時間確保後端已處理完成
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        const verifyLeads = await fetchLeadsFromApi();
+        const verifyLead = verifyLeads.find((l: Lead) => l.id === leadId);
+        if (verifyLead) {
+          const savedCosts = verifyLead.cost_records || [];
+          const isSaved = savedCosts.some(c => c.id === newRecord.id);
+          
+          console.log('🔍 驗證成本記錄保存:', {
+            leadId,
+            caseCode: verifyLead.case_code,
+            expectedCostId: newRecord.id,
+            savedCostIds: savedCosts.map(c => c.id),
+            isSaved,
+            totalCosts: savedCosts.length,
+            costDetails: savedCosts.map(c => ({ id: c.id, item: c.item_name, amount: c.amount }))
+          });
+          
+          if (isSaved) {
+            console.log('✅ 成本記錄已成功保存到後端並驗證:', newRecord);
+          } else {
+            console.error('❌ 成本記錄未正確保存！', {
+              expected: newRecord,
+              actual: savedCosts,
+              leadStatus: verifyLead.status
+            });
+            // 如果驗證失敗，拋出錯誤
+            throw new Error(`成本記錄保存失敗：後端數據中找不到 ID ${newRecord.id}`);
+          }
+        } else {
+          console.error('❌ 驗證時找不到案件:', leadId);
+        }
+      } catch (verifyError: any) {
+        console.error('❌ 驗證保存時出錯:', verifyError);
+        // 如果是驗證失敗，重新拋出錯誤
+        if (verifyError.message && verifyError.message.includes('成本記錄保存失敗')) {
+          throw verifyError;
+        }
+        // 其他錯誤只記錄警告
+        console.warn('⚠️ 驗證過程出錯，但可能已成功保存:', verifyError);
+      }
+      
       await logAction(leadId, AuditAction.UPDATE, lead, { ...lead, cost_records: updatedCosts });
       return newRecord;
-    } catch (error) {
-      console.error('API 添加成本記錄失敗:', error);
+    } catch (error: any) {
+      console.error('❌ API 添加成本記錄失敗:', error);
+      console.error('錯誤詳情:', {
+        message: error.message,
+        name: error.name,
+        leadId: leadId,
+        stack: error.stack
+      });
+      
+      // 如果是 Quota Exceeded 錯誤，不降級到 localStorage（因為也會失敗）
+      if (error.message && (error.message.includes('Quota Exceeded') || error.message.includes('quota'))) {
+        throw new Error('瀏覽器儲存空間已滿，無法保存成本記錄。請清理瀏覽器儲存空間或聯繫管理員。');
+      }
+      
+      // 如果是 Lead not found 錯誤，嘗試從 localStorage 獲取
+      if (error.message && error.message.includes('Lead not found')) {
+        console.warn('⚠️ API 找不到案件，嘗試從 localStorage 獲取');
+        const localLeads = getLeads();
+        const localLead = localLeads.find(l => l.id === leadId);
+        if (localLead) {
+          console.log('✅ 在 localStorage 中找到案件，使用 localStorage 保存');
+          // 繼續執行 localStorage 模式
+        } else {
+          throw new Error(`找不到案件 ID: ${leadId}。請確認案件是否存在。`);
+        }
+      } else {
+        // 其他錯誤：嘗試降級到 localStorage
+        console.warn('⚠️ 嘗試降級到 localStorage 模式');
+      }
     }
   }
 
-  const leads = getLeads();
-  const index = leads.findIndex(l => l.id === leadId);
-  if (index === -1) throw new Error('Lead not found');
-  leads[index].cost_records = [...(leads[index].cost_records || []), newRecord];
-  saveLeads(leads);
-  await logAction(leadId, AuditAction.UPDATE, leads[index], leads[index]);
-  return newRecord;
+  // localStorage 模式（降級方案）
+  try {
+    const leads = getLeads();
+    const index = leads.findIndex(l => l.id === leadId);
+    if (index === -1) {
+      console.error('❌ localStorage 中也找不到案件:', {
+        leadId,
+        availableIds: leads.slice(0, 5).map(l => l.id),
+        totalLeads: leads.length
+      });
+      throw new Error(`找不到案件 ID: ${leadId}。請確認案件是否存在。`);
+    }
+    leads[index].cost_records = [...(leads[index].cost_records || []), newRecord];
+    saveLeads(leads);
+    await logAction(leadId, AuditAction.UPDATE, leads[index], leads[index]);
+    console.log('✅ 成本記錄已保存到 localStorage:', newRecord);
+    return newRecord;
+  } catch (error: any) {
+    console.error('❌ localStorage 保存失敗:', error);
+    // 如果是 Quota Exceeded，拋出明確錯誤
+    if (error.message && (error.message.includes('Quota Exceeded') || error.message.includes('quota'))) {
+      throw new Error('瀏覽器儲存空間已滿，無法保存成本記錄。請清理瀏覽器儲存空間或聯繫管理員。');
+    }
+    throw error;
+  }
 };
 
 // 刪除成本記錄

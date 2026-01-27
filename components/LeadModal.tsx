@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Lead, Platform, ContactStatus, LeadStatus, Role, ProgressUpdate, ChangeHistory, CostRecord, ProfitRecord } from '../types';
-import { CONTACT_STATUS_OPTIONS, PLATFORM_OPTIONS, DEFAULT_COST_ITEMS, PRO360_COST_ITEM } from '../constants';
+import { CONTACT_STATUS_OPTIONS, PLATFORM_OPTIONS, DEFAULT_COST_ITEMS } from '../constants';
 import { X, Upload, Sparkles, User, Loader2, Info, Plus, MessageSquare, Calendar, History, TrendingUp, Camera, Link as LinkIcon, Image as ImageIcon, DollarSign, TrendingDown, FileText } from 'lucide-react';
 import { extractLeadFromImage } from '../services/aiService';
 import { addProgressUpdate, addCostRecord, deleteCostRecord, addProfitRecord, deleteProfitRecord } from '../services/leadService';
@@ -20,9 +20,29 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
   const [initialData, setInitialData] = useState<Lead | null>(propInitialData || null);
   
   // 當 propInitialData 改變時，更新內部狀態
+  // 但只在 Modal 剛打開或切換到不同案件時才更新，避免覆蓋掉部分更新（如進度更新、成本記錄等）
   useEffect(() => {
-    setInitialData(propInitialData || null);
-  }, [propInitialData]);
+    const isModalJustOpened = !prevIsOpenRef.current && isOpen;
+    const isDifferentLead = prevInitialDataIdRef.current !== (propInitialData?.id || null);
+    
+    // 只在 Modal 剛打開或切換到不同案件時才更新 initialData
+    if (isModalJustOpened || isDifferentLead) {
+      setInitialData(propInitialData || null);
+    } else if (propInitialData && initialData?.id === propInitialData.id) {
+      // 如果是同一個案件，但 propInitialData 有更新（例如從父組件傳入的更新），則合併更新
+      // 但優先保留本地已更新的部分（如 cost_records、profit_records、progress_updates）
+      setInitialData(prev => {
+        if (!prev) return propInitialData;
+        // 合併更新，但保留本地已更新的部分
+        return {
+          ...propInitialData,
+          cost_records: prev.cost_records || propInitialData.cost_records,
+          profit_records: prev.profit_records || propInitialData.profit_records,
+          progress_updates: prev.progress_updates || propInitialData.progress_updates
+        };
+      });
+    }
+  }, [propInitialData, isOpen]);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const aiFileInputRef = useRef<HTMLInputElement>(null);
@@ -124,9 +144,18 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
       setProgressUrlInput('');
       setShowHistory(false);
     } else if (propInitialData && propInitialData.id === prevInitialDataIdRef.current) {
-      // 如果是同一個案件，只更新 initialData 但不重置 formData
-      // 這樣可以保持用戶正在輸入的內容
-      setInitialData(propInitialData);
+      // 如果是同一個案件，合併更新 initialData 但不重置 formData
+      // 這樣可以保持用戶正在輸入的內容，同時保留本地已更新的部分（如成本記錄、利潤記錄、進度更新）
+      setInitialData(prev => {
+        if (!prev) return propInitialData;
+        // 合併更新，但優先保留本地已更新的部分
+        return {
+          ...propInitialData,
+          cost_records: prev.cost_records || propInitialData.cost_records,
+          profit_records: prev.profit_records || propInitialData.profit_records,
+          progress_updates: prev.progress_updates || propInitialData.progress_updates
+        };
+      });
     }
     
     // 更新 ref 值
@@ -178,15 +207,15 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
         }));
         setIsAiFilled(true);
       } catch (err: any) {
-        console.error('AI 解析錯誤:', err);
+        console.error('OCR 解析錯誤:', err);
         // 顯示更具體的錯誤訊息
         const errorMessage = err?.message || '未知錯誤';
-        if (errorMessage.includes('API Key')) {
-          alert(`❌ ${errorMessage}\n\n請在 .env 文件中設置 VITE_API_KEY 或 GEMINI_API_KEY\n獲取 API Key: https://aistudio.google.com/app/apikey`);
-        } else if (errorMessage.includes('網路')) {
-          alert(`❌ ${errorMessage}\n\n請檢查您的網路連線後再試。`);
+        if (errorMessage.includes('無法識別') || errorMessage.includes('文字')) {
+          alert(`❌ ${errorMessage}\n\n請確認圖片清晰可讀`);
+        } else if (errorMessage.includes('worker') || errorMessage.includes('tesseract')) {
+          alert(`❌ ${errorMessage}\n\n請重新整理頁面後再試`);
         } else {
-          alert(`❌ AI 解析失敗：${errorMessage}\n\n請確認：\n1. 已設置 API Key\n2. 圖片清晰可讀\n3. 網路連線正常`);
+          alert(`❌ OCR 解析失敗：${errorMessage}\n\n請確認圖片清晰可讀`);
         }
       } finally {
         setAiLoading(false);
@@ -477,9 +506,10 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
           setInitialData(updatedLead);
           onSubmit({ cost_records: updatedCosts });
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('添加成本記錄失敗:', error);
-        alert('添加成本記錄失敗');
+        const errorMessage = error?.message || '未知錯誤';
+        alert(`添加成本記錄失敗：${errorMessage}`);
         return;
       }
     } else {
@@ -736,9 +766,9 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
                         <Camera size={20} />
                       </div>
                       <div>
-                        <p className="font-black text-indigo-900 text-sm">AI 智能截圖匯入</p>
+                        <p className="font-black text-indigo-900 text-sm">OCR 截圖匯入</p>
                         <p className="text-indigo-600/70 font-bold text-xs">
-                          {isAiDragging ? '放開以上傳' : '拖放截圖至此或點擊上傳'}
+                          {isAiDragging ? '放開以上傳' : aiLoading ? '正在識別文字...' : '拖放截圖至此或點擊上傳'}
                         </p>
                       </div>
                     </div>
@@ -746,7 +776,7 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
                       {aiLoading ? (
                         <div className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-sm flex items-center gap-2">
                           <Loader2 className="animate-spin" size={16} />
-                          識別中...
+                          OCR 識別中...
                         </div>
                       ) : (
                         <div className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-sm flex items-center gap-2 hover:bg-indigo-700 transition-all">

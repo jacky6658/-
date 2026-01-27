@@ -1,9 +1,10 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Lead, LeadStatus, Role, AuditAction } from '../types';
 import { STATUS_OPTIONS, STATUS_COLORS } from '../constants';
 import Badge from './Badge';
 import { updateLead } from '../services/leadService';
+import { X } from 'lucide-react';
 
 interface KanbanBoardProps {
   leads: Lead[];
@@ -13,6 +14,8 @@ interface KanbanBoardProps {
 
 const KanbanBoard: React.FC<KanbanBoardProps> = ({ leads, onSelectLead, userRole }) => {
   const [draggedLead, setDraggedLead] = useState<Lead | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ lead: Lead; x: number; y: number } | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
 
   const handleDragStart = (lead: Lead) => {
     setDraggedLead(lead);
@@ -26,6 +29,39 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ leads, onSelectLead, userRole
     setDraggedLead(null);
   };
 
+  // 處理右鍵選單
+  const handleContextMenu = (e: React.MouseEvent, lead: Lead) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({
+      lead,
+      x: e.clientX,
+      y: e.clientY
+    });
+  };
+
+  // 處理狀態變更
+  const handleStatusChange = async (lead: Lead, newStatus: LeadStatus) => {
+    if (lead.status !== newStatus) {
+      await updateLead(lead.id, { status: newStatus }, AuditAction.MOVE_STATUS);
+    }
+    setContextMenu(null);
+  };
+
+  // 點擊外部關閉選單
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
+        setContextMenu(null);
+      }
+    };
+
+    if (contextMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [contextMenu]);
+
   return (
     <div className="flex gap-4 overflow-x-auto pb-4 h-full scrollbar-thin">
       {STATUS_OPTIONS.filter(status => status !== LeadStatus.TO_IMPORT).map((status) => {
@@ -37,12 +73,21 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ leads, onSelectLead, userRole
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => handleDrop(e, status)}
           >
-            <div className={`p-3 rounded-t-lg border-b-2 flex items-center justify-between bg-white shadow-sm border-indigo-100`}>
-              <h3 className="text-sm font-bold flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${STATUS_COLORS[status].split(' ')[0].replace('bg-', 'bg-opacity-100 bg-')}`}></span>
-                {status}
-              </h3>
-              <Badge className="bg-gray-100 text-gray-500">{columnLeads.length}</Badge>
+            <div className={`p-3 rounded-t-lg border-b-2 bg-white shadow-sm border-indigo-100`}>
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="text-sm font-bold flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${STATUS_COLORS[status].split(' ')[0].replace('bg-', 'bg-opacity-100 bg-')}`}></span>
+                  {status}
+                </h3>
+                <Badge className="bg-gray-100 text-gray-500">{columnLeads.length}</Badge>
+              </div>
+              {/* 狀態說明文字 */}
+              {status === LeadStatus.CANCELLED && (
+                <p className="text-[10px] text-slate-400 font-medium mt-1">未使用 Pro360 索取個資</p>
+              )}
+              {status === LeadStatus.DECLINED && (
+                <p className="text-[10px] text-slate-400 font-medium mt-1">已使用 Pro360 索取個資</p>
+              )}
             </div>
             
             <div className="flex-1 bg-gray-50 rounded-b-lg p-2 space-y-3 overflow-y-auto kanban-column scrollbar-hide">
@@ -52,6 +97,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ leads, onSelectLead, userRole
                   draggable
                   onDragStart={() => handleDragStart(lead)}
                   onClick={() => onSelectLead(lead)}
+                  onContextMenu={(e) => handleContextMenu(e, lead)}
                   className="bg-white p-3 rounded-lg shadow-sm border border-gray-200 cursor-move hover:shadow-md transition-shadow group"
                 >
                   <div className="flex justify-between items-start mb-2">
@@ -79,6 +125,49 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ leads, onSelectLead, userRole
           </div>
         );
       })}
+
+      {/* 右鍵選單 */}
+      {contextMenu && (
+        <>
+          <div 
+            className="fixed inset-0 z-40"
+            onClick={() => setContextMenu(null)}
+          />
+          <div
+            ref={contextMenuRef}
+            className="fixed z-50 bg-white rounded-xl shadow-2xl border border-gray-200 py-2 min-w-[200px]"
+            style={{
+              left: `${contextMenu.x}px`,
+              top: `${contextMenu.y}px`,
+              transform: 'translate(-50%, -10px)'
+            }}
+          >
+            <div className="px-4 py-2 border-b border-gray-100">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-black text-gray-400 uppercase tracking-widest">移動到</p>
+                <button
+                  onClick={() => setContextMenu(null)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            </div>
+            <div className="py-2">
+              {STATUS_OPTIONS.filter(status => status !== LeadStatus.TO_IMPORT && status !== contextMenu.lead.status).map((status) => (
+                <button
+                  key={status}
+                  onClick={() => handleStatusChange(contextMenu.lead, status)}
+                  className="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
+                >
+                  <span className={`w-2 h-2 rounded-full ${STATUS_COLORS[status].split(' ')[0].replace('bg-', 'bg-opacity-100 bg-')}`}></span>
+                  {status}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };

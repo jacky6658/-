@@ -16,7 +16,8 @@ export const STATUS_COLORS: Record<LeadStatus, string> = {
   [LeadStatus.IN_PROGRESS]: 'text-indigo-600 bg-indigo-50',
   [LeadStatus.WON]: 'text-emerald-600 bg-emerald-50',
   [LeadStatus.CLOSED]: 'text-gray-600 bg-gray-50',
-  [LeadStatus.REJECTED]: 'text-red-600 bg-red-50'
+  [LeadStatus.CANCELLED]: 'text-red-600 bg-red-50',
+  [LeadStatus.DECLINED]: 'text-orange-600 bg-orange-50'
 };
 
 export const DECISION_COLORS: Record<Decision, string> = {

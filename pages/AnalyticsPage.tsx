@@ -14,7 +14,8 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ leads, userProfile }) => 
 
   // 計算案件統計
   const dashboardStats = useMemo(() => {
-    const rejected = leads.filter(l => l.decision === Decision.REJECT).length;
+    const cancelled = leads.filter(l => l.status === LeadStatus.CANCELLED).length;
+    const declined = leads.filter(l => l.status === LeadStatus.DECLINED).length;
     const accepted = leads.filter(l => l.decision === Decision.ACCEPT).length;
     const inProgress = leads.filter(l => 
       l.status === LeadStatus.IN_PROGRESS || 
@@ -22,10 +23,10 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ leads, userProfile }) => 
       l.status === LeadStatus.CONTACTED
     ).length;
     
-    return { rejected, accepted, inProgress, total: leads.length };
+    return { cancelled, declined, accepted, inProgress, total: leads.length };
   }, [leads]);
 
-  // 計算總成本和總利潤
+  // 計算總成本和總利潤（排除取消的案件，但包含婉拒的案件）
   const analytics = useMemo(() => {
     let totalCost = 0;
     let totalProfit = 0;
@@ -34,7 +35,10 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ leads, userProfile }) => 
     const costByItem: Record<string, number> = {};
     const profitByItem: Record<string, number> = {};
 
-    leads.forEach(lead => {
+    // 過濾掉取消的案件，但保留婉拒的案件（因為婉拒的案件有成本）
+    const activeLeads = leads.filter(lead => lead.status !== LeadStatus.CANCELLED);
+
+    activeLeads.forEach(lead => {
       let leadCost = 0;
       let leadProfit = 0;
 
@@ -120,18 +124,33 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ leads, userProfile }) => 
           </p>
         </div>
 
-        {/* 拒絕案件 */}
+        {/* 取消案件 */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="w-12 h-12 bg-red-50 rounded-xl flex items-center justify-center">
               <XCircle size={24} className="text-red-600" />
             </div>
           </div>
-          <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-2">拒絕案件</h3>
-          <p className="text-3xl font-black text-red-600">{dashboardStats.rejected}</p>
+          <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-2">取消案件</h3>
+          <p className="text-3xl font-black text-red-600">{dashboardStats.cancelled}</p>
           <p className="text-xs text-slate-400 mt-2">
-            {dashboardStats.total > 0 ? ((dashboardStats.rejected / dashboardStats.total) * 100).toFixed(1) : '0'}% 拒絕率
+            {dashboardStats.total > 0 ? ((dashboardStats.cancelled / dashboardStats.total) * 100).toFixed(1) : '0'}% 取消率
           </p>
+        </div>
+        
+        {/* 婉拒/無法聯繫案件 */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="w-12 h-12 bg-orange-50 rounded-xl flex items-center justify-center">
+              <XCircle size={24} className="text-orange-600" />
+            </div>
+          </div>
+          <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-2">婉拒/無法聯繫</h3>
+          <p className="text-3xl font-black text-orange-600">{dashboardStats.declined}</p>
+          <p className="text-xs text-slate-400 mt-2">
+            {dashboardStats.total > 0 ? ((dashboardStats.declined / dashboardStats.total) * 100).toFixed(1) : '0'}% 婉拒率
+          </p>
+          <p className="text-[10px] text-slate-500 mt-2">已使用 Pro360 索取個資</p>
         </div>
 
         {/* 正在執行 */}
@@ -218,7 +237,9 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ leads, userProfile }) => 
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-100">
-              {leads.map(lead => {
+              {leads
+                .filter(lead => lead.status !== LeadStatus.CANCELLED) // 過濾掉取消的案件，但保留婉拒的案件
+                .map(lead => {
                 const leadCost = (lead.cost_records || []).reduce((sum, r) => sum + r.amount, 0);
                 const leadProfit = (lead.profit_records || []).reduce((sum, r) => sum + r.amount, 0);
                 const leadNet = leadProfit - leadCost;

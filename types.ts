@@ -26,7 +26,8 @@ export enum LeadStatus {
   IN_PROGRESS = '製作中',
   WON = '已成交',
   CLOSED = '結案',
-  REJECTED = '拒絕'
+  CANCELLED = '取消',
+  DECLINED = '婉拒/無法聯繫'
 }
 
 export enum Decision {

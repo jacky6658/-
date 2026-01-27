@@ -119,15 +119,15 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
         setSelectedLead(draftLead as Lead);
         setIsModalOpen(true);
       } catch (err: any) {
-        console.error('AI 解析錯誤:', err);
+        console.error('OCR 解析錯誤:', err);
         // 顯示更具體的錯誤訊息
         const errorMessage = err?.message || '未知錯誤';
-        if (errorMessage.includes('API Key')) {
-          alert(`❌ ${errorMessage}\n\n請在 .env 文件中設置 VITE_API_KEY 或 GEMINI_API_KEY\n獲取 API Key: https://aistudio.google.com/app/apikey`);
-        } else if (errorMessage.includes('網路')) {
-          alert(`❌ ${errorMessage}\n\n請檢查您的網路連線後再試。`);
+        if (errorMessage.includes('無法識別') || errorMessage.includes('文字')) {
+          alert(`❌ ${errorMessage}\n\n請確認圖片清晰可讀`);
+        } else if (errorMessage.includes('worker') || errorMessage.includes('tesseract')) {
+          alert(`❌ ${errorMessage}\n\n請重新整理頁面後再試`);
         } else {
-          alert(`❌ AI 解析失敗：${errorMessage}\n\n請確認：\n1. 已設置 API Key\n2. 圖片清晰可讀\n3. 網路連線正常`);
+          alert(`❌ OCR 解析失敗：${errorMessage}\n\n請確認圖片清晰可讀`);
         }
       } finally {
         setAiLoading(false);
@@ -249,12 +249,12 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
       decision: newDecision,
       decision_by: isCancel ? undefined : userProfile.displayName 
     };
-    if (isCancel) {
-      updates.status = LeadStatus.TO_FILTER;
-    } else {
-      if (clickedDecision === Decision.REJECT) updates.status = LeadStatus.REJECTED;
-      else if (clickedDecision === Decision.ACCEPT) updates.status = LeadStatus.CONTACTED;
-    }
+        if (isCancel) {
+          updates.status = LeadStatus.TO_FILTER;
+        } else {
+          if (clickedDecision === Decision.REJECT) updates.status = LeadStatus.CANCELLED;
+          else if (clickedDecision === Decision.ACCEPT) updates.status = LeadStatus.CONTACTED;
+        }
     await updateLead(lead.id, updates, AuditAction.DECISION);
   };
 
@@ -307,12 +307,13 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
 
   return (
     <div className="space-y-6 relative">
-      {aiLoading && (
-        <div className="fixed inset-0 z-[300] bg-slate-900/60 backdrop-blur-md flex flex-col items-center justify-center text-white">
-          <Loader2 className="animate-spin mb-4" size={48} />
-          <h3 className="text-xl font-black tracking-widest">AI 正在解析內容...</h3>
-        </div>
-      )}
+          {aiLoading && (
+            <div className="fixed inset-0 z-[300] bg-slate-900/60 backdrop-blur-md flex flex-col items-center justify-center text-white">
+              <Loader2 className="animate-spin mb-4" size={48} />
+              <h3 className="text-xl font-black tracking-widest">OCR 正在識別文字...</h3>
+              <p className="text-sm text-slate-300 mt-2">首次使用需要載入 OCR 引擎，請稍候</p>
+            </div>
+          )}
 
       <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100">
         <div className="flex-1 flex items-center gap-4 w-full max-w-lg">
@@ -334,7 +335,7 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
                 className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl text-sm font-black hover:bg-indigo-700 transition-all shadow-lg active:scale-95"
               >
                 <Camera size={18} />
-                AI 傳圖識別
+                OCR 截圖識別
               </button>
               <input type="file" ref={aiFileInputRef} className="hidden" accept="image/*" onChange={(e) => e.target.files?.[0] && processAiFile(e.target.files[0])} />
               

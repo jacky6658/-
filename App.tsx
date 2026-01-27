@@ -14,6 +14,7 @@ import MembersPage from './pages/MembersPage';
 import ImportPage from './pages/ImportPage';
 import MigrationPage from './pages/MigrationPage';
 import AnalyticsPage from './pages/AnalyticsPage';
+import HelpPage from './pages/HelpPage';
 import LoginPage from './pages/LoginPage';
 import { subscribeToLeads } from './services/leadService';
 import { Menu, X as XIcon } from 'lucide-react';
@@ -173,6 +174,9 @@ const App: React.FC = () => {
       case 'analytics': 
         // 所有用戶都可以查看財務分析
         return <AnalyticsPage leads={leads} userProfile={profile} />;
+      case 'help':
+        // 所有用戶都可以查看使用說明
+        return <HelpPage userProfile={profile} />;
       case 'migration': 
         // 只有管理員可以訪問資料遷移
         if (profile.role !== Role.ADMIN) {

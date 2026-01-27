@@ -18,6 +18,7 @@ const DecisionModal: React.FC<DecisionModalProps> = ({ lead, isOpen, onClose, on
   const [rejectReason, setRejectReason] = useState<RejectReason>(lead.reject_reason || RejectReason.LOW_BUDGET);
   const [reviewNote, setReviewNote] = useState(lead.review_note || '');
   const [loading, setLoading] = useState(false);
+  const [isDeclined, setIsDeclined] = useState(lead.status === LeadStatus.DECLINED);
 
   if (!isOpen) return null;
 
@@ -25,20 +26,30 @@ const DecisionModal: React.FC<DecisionModalProps> = ({ lead, isOpen, onClose, on
     setLoading(true);
     try {
       // 構建更新對象，只包含有值的欄位
+      let status: LeadStatus;
+      
+      if (decision === Decision.ACCEPT) {
+        status = LeadStatus.CONTACTED;
+      } else if (decision === Decision.REJECT) {
+        // 如果是婉拒/未聯繫，使用 DECLINED 狀態
+        status = isDeclined ? LeadStatus.DECLINED : LeadStatus.CANCELLED;
+      } else {
+        // 待問：保持原狀態
+        status = lead.status;
+      }
+      
       const updates: Partial<Lead> = {
         decision,
         decision_by: userProfile.displayName,
         review_note: reviewNote || null,
-        status: decision === Decision.REJECT 
-          ? LeadStatus.REJECTED 
-          : (decision === Decision.ACCEPT ? LeadStatus.CONTACTED : lead.status)
+        status
       };
       
-      // 只有在拒絕時才設置 reject_reason
+      // 只有在取消或婉拒時才設置 reject_reason
       if (decision === Decision.REJECT) {
         updates.reject_reason = rejectReason;
       } else {
-        // 如果不是拒絕，清除 reject_reason
+        // 如果不是取消或婉拒，清除 reject_reason
         updates.reject_reason = null;
       }
       
@@ -62,7 +73,7 @@ const DecisionModal: React.FC<DecisionModalProps> = ({ lead, isOpen, onClose, on
         <div className="space-y-6">
           <div>
             <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">審核決定</label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2 mb-2">
               <button 
                 onClick={() => setDecision(Decision.ACCEPT)}
                 className={`py-3 rounded-xl border-2 text-xs font-black transition-all ${decision === Decision.ACCEPT ? 'bg-green-50 border-green-500 text-green-700' : 'bg-white border-slate-100 text-slate-400'}`}
@@ -70,23 +81,54 @@ const DecisionModal: React.FC<DecisionModalProps> = ({ lead, isOpen, onClose, on
                 ✅ 接受
               </button>
               <button 
-                onClick={() => setDecision(Decision.REJECT)}
-                className={`py-3 rounded-xl border-2 text-xs font-black transition-all ${decision === Decision.REJECT ? 'bg-red-50 border-red-500 text-red-700' : 'bg-white border-slate-100 text-slate-400'}`}
+                onClick={() => {
+                  setDecision(Decision.REJECT);
+                  setIsDeclined(false);
+                }}
+                className={`py-3 rounded-xl border-2 text-xs font-black transition-all ${decision === Decision.REJECT && !isDeclined ? 'bg-red-50 border-red-500 text-red-700' : 'bg-white border-slate-100 text-slate-400'}`}
               >
-                ❌ 拒絕
+                ❌ 取消
               </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
               <button 
-                onClick={() => setDecision(Decision.PENDING)}
+                onClick={() => {
+                  setDecision(Decision.PENDING);
+                  setIsDeclined(false);
+                }}
                 className={`py-3 rounded-xl border-2 text-xs font-black transition-all ${decision === Decision.PENDING ? 'bg-amber-50 border-amber-500 text-amber-700' : 'bg-white border-slate-100 text-slate-400'}`}
+                title="待問：需要進一步確認或詢問的案件"
               >
                 🟡 待問
               </button>
+              <button 
+                onClick={() => {
+                  // 設置為婉拒/未聯繫狀態
+                  setDecision(Decision.REJECT);
+                  setIsDeclined(true);
+                }}
+                className={`py-3 rounded-xl border-2 text-xs font-black transition-all ${isDeclined && decision === Decision.REJECT ? 'bg-orange-50 border-orange-500 text-orange-700' : 'bg-white border-slate-100 text-slate-400'}`}
+                title="婉拒/未聯繫：已使用 Pro360 索取個資但無法聯繫或決定不做"
+              >
+                🟠 婉拒/未聯繫
+              </button>
+            </div>
+            {/* 說明文字 */}
+            <div className="mt-3 p-3 bg-slate-50 rounded-xl">
+              <p className="text-[10px] text-slate-500 font-medium mb-1">
+                <span className="font-black">待問：</span>需要進一步確認或詢問的案件，狀態保持不變
+              </p>
+              <p className="text-[10px] text-slate-500 font-medium">
+                <span className="font-black">婉拒/未聯繫：</span>已使用 Pro360 索取個資但無法聯繫或決定不做，狀態會變更為「婉拒/無法聯繫」
+              </p>
             </div>
           </div>
 
           {decision === Decision.REJECT && (
             <div className="animate-in fade-in slide-in-from-top-2">
-              <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">拒絕原因</label>
+              <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">
+                {isDeclined ? '婉拒/未聯繫原因' : '取消原因'}
+              </label>
               <select 
                 className="w-full border-2 border-slate-100 rounded-xl p-3 text-sm font-bold bg-slate-50 focus:bg-white focus:border-indigo-500 outline-none"
                 value={rejectReason}
