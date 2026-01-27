@@ -16,11 +16,21 @@ const LoginPage: React.FC = () => {
 
   const loadUsers = async () => {
     try {
-      const allUsers = await getAllUsers();
-      // 確保至少有預設用戶
+      let allUsers = await getAllUsers();
+      
+      // 如果沒有用戶，嘗試初始化預設用戶
       if (allUsers.length === 0) {
-        console.warn('未找到任何用戶，請檢查資料庫或 localStorage');
+        console.log('未找到用戶，初始化預設用戶...');
+        // 創建預設用戶
+        await createUserProfile('admin', 'admin@aijob.internal', Role.ADMIN, 'Admin', 'admin123');
+        await createUserProfile('phoebe', 'phoebe@aijob.internal', Role.REVIEWER, 'Phoebe', 'phoebe123');
+        await createUserProfile('jacky', 'jacky@aijob.internal', Role.REVIEWER, 'Jacky', 'jacky123');
+        await createUserProfile('jim', 'jim@aijob.internal', Role.REVIEWER, 'Jim', 'jim123');
+        
+        // 重新獲取用戶列表
+        allUsers = await getAllUsers();
       }
+      
       setUsers(allUsers);
     } catch (error) {
       console.error('載入用戶失敗:', error);

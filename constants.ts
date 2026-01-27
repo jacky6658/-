@@ -4,6 +4,8 @@ export const PLATFORM_OPTIONS = Object.values(Platform);
 
 export const CONTACT_STATUS_OPTIONS = Object.values(ContactStatus);
 
+export const REJECT_REASON_OPTIONS = Object.values(RejectReason);
+
 export const STATUS_COLORS: Record<LeadStatus, string> = {
   [LeadStatus.TO_IMPORT]: 'text-slate-500 bg-slate-50',
   [LeadStatus.TO_FILTER]: 'text-amber-600 bg-amber-50',
