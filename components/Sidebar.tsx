@@ -20,7 +20,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, profile, onL
     { id: 'review', label: '待我審核', icon: CheckSquare, roles: [Role.ADMIN, Role.REVIEWER] },
     { id: 'kanban', label: '流程看板', icon: LayoutGrid, roles: [Role.ADMIN, Role.REVIEWER] },
     { id: 'import', label: '匯入案件', icon: Download, roles: [Role.ADMIN] },
-    { id: 'analytics', label: '財務分析', icon: BarChart3, roles: [Role.ADMIN] },
+    { id: 'analytics', label: '財務分析', icon: BarChart3, roles: [Role.ADMIN, Role.REVIEWER] },
     { id: 'audit', label: '操作紀錄', icon: History, roles: [Role.ADMIN, Role.REVIEWER] },
     { id: 'members', label: '成員管理', icon: Users, roles: [Role.ADMIN] },
     { id: 'migration', label: '資料遷移', icon: Database, roles: [Role.ADMIN] },
@@ -64,35 +64,35 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, profile, onL
           >
             <X size={20} />
           </button>
-        </div>
-        
-        <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto">
-          {menuItems.filter(item => item.roles.includes(profile.role)).map((item) => (
-            <button
-              key={item.id}
-              onClick={() => handleItemClick(item.id)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                activeTab === item.id 
-                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' 
-                : 'hover:bg-slate-800 hover:text-white'
-              }`}
-            >
-              <item.icon size={18} />
-              {item.label}
-            </button>
-          ))}
-        </nav>
-
-        <div className="p-4 border-t border-slate-800">
-          <button 
-            onClick={onLogout}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-white transition-all"
-          >
-            <LogOut size={18} />
-            登出
-          </button>
-        </div>
       </div>
+      
+        <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto">
+        {menuItems.filter(item => item.roles.includes(profile.role)).map((item) => (
+          <button
+            key={item.id}
+              onClick={() => handleItemClick(item.id)}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+              activeTab === item.id 
+              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' 
+              : 'hover:bg-slate-800 hover:text-white'
+            }`}
+          >
+            <item.icon size={18} />
+            {item.label}
+          </button>
+        ))}
+      </nav>
+
+      <div className="p-4 border-t border-slate-800">
+        <button 
+          onClick={onLogout}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-white transition-all"
+        >
+          <LogOut size={18} />
+          登出
+        </button>
+      </div>
+    </div>
     </>
   );
 };

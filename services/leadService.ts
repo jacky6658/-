@@ -1,9 +1,10 @@
 
 import { auth } from '../mockBackend';
-import { Lead, LeadStatus, Decision, AuditAction, ProgressUpdate, ChangeHistory } from '../types';
+import { Lead, LeadStatus, Decision, AuditAction, ProgressUpdate, ChangeHistory, CostRecord, ProfitRecord, Platform } from '../types';
 import { logAction } from './auditService';
 import { getUserProfile } from './userService';
 import { apiRequest, useApiMode, getApiUrl } from './apiConfig';
+import { PRO360_COST_ITEM } from '../constants';
 
 const STORAGE_KEY = 'caseflow_leads_db';
 
@@ -162,9 +163,42 @@ export const updateLead = async (id: string, updates: Partial<Lead>, actionType:
       const after = {
         ...before,
         ...updates,
-        last_action_by: actorName
+        last_action_by: actorName,
+        // 確保 cost_records 和 profit_records 存在
+        cost_records: updates.cost_records !== undefined ? updates.cost_records : (before.cost_records || []),
+        profit_records: updates.profit_records !== undefined ? updates.profit_records : (before.profit_records || [])
         // 注意：不包含 updated_at，讓後端統一處理
       };
+
+      // Pro360 自動成本管理
+      if (before.platform === Platform.PRO360) {
+        const newStatus = updates.status !== undefined ? updates.status : before.status;
+        const oldStatus = before.status;
+        const costRecords = after.cost_records || [];
+        const pro360CostIndex = costRecords.findIndex((c: CostRecord) => c.item_name === PRO360_COST_ITEM);
+
+        // 如果狀態變為「已接洽」，且還沒有 Pro360 成本記錄，則添加
+        if (newStatus === LeadStatus.CONTACTED && oldStatus !== LeadStatus.CONTACTED && pro360CostIndex === -1) {
+          const pro360Cost: CostRecord = {
+            id: 'cost_pro360_' + Math.random().toString(36).substr(2, 9),
+            lead_id: id,
+            item_name: PRO360_COST_ITEM,
+            amount: 0, // 預設為 0，用戶可以手動修改
+            author_uid: user.uid,
+            author_name: actorName,
+            created_at: new Date().toISOString(),
+            note: '自動添加：案件已接洽，請輸入實際費用'
+          };
+          after.cost_records = [...costRecords, pro360Cost];
+          console.log('✅ Pro360 案件已接洽，自動添加成本記錄');
+        }
+
+        // 如果狀態變為「已拒絕」，移除 Pro360 成本記錄（可能退費）
+        if (newStatus === LeadStatus.REJECTED && oldStatus !== LeadStatus.REJECTED && pro360CostIndex !== -1) {
+          after.cost_records = costRecords.filter((c: CostRecord, idx: number) => idx !== pro360CostIndex);
+          console.log('✅ Pro360 案件已拒絕，自動移除成本記錄（可能退費）');
+        }
+      }
 
       // 記錄欄位變更
       const fieldChanges = recordFieldChanges(before, after, user.uid, actorName);
@@ -201,6 +235,36 @@ export const updateLead = async (id: string, updates: Partial<Lead>, actionType:
     last_action_by: actorName,
     updated_at: new Date().toISOString()
   };
+
+  // Pro360 自動成本管理
+  if (before.platform === Platform.PRO360) {
+    const newStatus = updates.status !== undefined ? updates.status : before.status;
+    const oldStatus = before.status;
+    const costRecords = after.cost_records || [];
+    const pro360CostIndex = costRecords.findIndex((c: CostRecord) => c.item_name === PRO360_COST_ITEM);
+
+    // 如果狀態變為「已接洽」，且還沒有 Pro360 成本記錄，則添加
+    if (newStatus === LeadStatus.CONTACTED && oldStatus !== LeadStatus.CONTACTED && pro360CostIndex === -1) {
+      const pro360Cost: CostRecord = {
+        id: 'cost_pro360_' + Math.random().toString(36).substr(2, 9),
+        lead_id: id,
+        item_name: PRO360_COST_ITEM,
+        amount: 0, // 預設為 0，用戶可以手動修改
+        author_uid: user.uid,
+        author_name: actorName,
+        created_at: new Date().toISOString(),
+        note: '自動添加：案件已接洽，請輸入實際費用'
+      };
+      after.cost_records = [...costRecords, pro360Cost];
+      console.log('✅ Pro360 案件已接洽，自動添加成本記錄');
+    }
+
+    // 如果狀態變為「已拒絕」，移除 Pro360 成本記錄（可能退費）
+    if (newStatus === LeadStatus.REJECTED && oldStatus !== LeadStatus.REJECTED && pro360CostIndex !== -1) {
+      after.cost_records = costRecords.filter((c: CostRecord, idx: number) => idx !== pro360CostIndex);
+      console.log('✅ Pro360 案件已拒絕，自動移除成本記錄（可能退費）');
+    }
+  }
 
   // 記錄欄位變更
   const fieldChanges = recordFieldChanges(before, after, user.uid, actorName);
@@ -328,4 +392,142 @@ export const subscribeToLeads = (callback: (leads: Lead[]) => void) => {
   window.addEventListener('leads_updated', handler);
   handler();
   return () => window.removeEventListener('leads_updated', handler);
+};
+
+// 添加成本記錄
+export const addCostRecord = async (leadId: string, record: Omit<CostRecord, 'id' | 'lead_id' | 'created_at'>) => {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Unauthorized');
+  const profile = await getUserProfile(user.uid);
+  const authorName = profile?.displayName || 'Unknown';
+
+  const newRecord: CostRecord = {
+    ...record,
+    id: 'cost_' + Math.random().toString(36).substr(2, 9),
+    lead_id: leadId,
+    author_uid: user.uid,
+    author_name: authorName,
+    created_at: new Date().toISOString(),
+  };
+
+  if (useApiMode()) {
+    try {
+      const currentLeads = await fetchLeadsFromApi();
+      const lead = currentLeads.find((l: Lead) => l.id === leadId);
+      if (!lead) throw new Error('Lead not found');
+      const updatedCosts = [...(lead.cost_records || []), newRecord];
+      await apiRequest(`/api/leads/${leadId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ cost_records: updatedCosts }),
+      });
+      await logAction(leadId, AuditAction.UPDATE, lead, { ...lead, cost_records: updatedCosts });
+      return newRecord;
+    } catch (error) {
+      console.error('API 添加成本記錄失敗:', error);
+    }
+  }
+
+  const leads = getLeads();
+  const index = leads.findIndex(l => l.id === leadId);
+  if (index === -1) throw new Error('Lead not found');
+  leads[index].cost_records = [...(leads[index].cost_records || []), newRecord];
+  saveLeads(leads);
+  await logAction(leadId, AuditAction.UPDATE, leads[index], leads[index]);
+  return newRecord;
+};
+
+// 刪除成本記錄
+export const deleteCostRecord = async (leadId: string, costId: string) => {
+  if (useApiMode()) {
+    try {
+      const currentLeads = await fetchLeadsFromApi();
+      const lead = currentLeads.find((l: Lead) => l.id === leadId);
+      if (!lead) throw new Error('Lead not found');
+      const updatedCosts = (lead.cost_records || []).filter(c => c.id !== costId);
+      await apiRequest(`/api/leads/${leadId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ cost_records: updatedCosts }),
+      });
+      await logAction(leadId, AuditAction.UPDATE, lead, { ...lead, cost_records: updatedCosts });
+      return;
+    } catch (error) {
+      console.error('API 刪除成本記錄失敗:', error);
+    }
+  }
+
+  const leads = getLeads();
+  const index = leads.findIndex(l => l.id === leadId);
+  if (index === -1) throw new Error('Lead not found');
+  leads[index].cost_records = (leads[index].cost_records || []).filter(c => c.id !== costId);
+  saveLeads(leads);
+  await logAction(leadId, AuditAction.UPDATE, leads[index], leads[index]);
+};
+
+// 添加利潤記錄
+export const addProfitRecord = async (leadId: string, record: Omit<ProfitRecord, 'id' | 'lead_id' | 'created_at'>) => {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Unauthorized');
+  const profile = await getUserProfile(user.uid);
+  const authorName = profile?.displayName || 'Unknown';
+
+  const newRecord: ProfitRecord = {
+    ...record,
+    id: 'profit_' + Math.random().toString(36).substr(2, 9),
+    lead_id: leadId,
+    author_uid: user.uid,
+    author_name: authorName,
+    created_at: new Date().toISOString(),
+  };
+
+  if (useApiMode()) {
+    try {
+      const currentLeads = await fetchLeadsFromApi();
+      const lead = currentLeads.find((l: Lead) => l.id === leadId);
+      if (!lead) throw new Error('Lead not found');
+      const updatedProfits = [...(lead.profit_records || []), newRecord];
+      await apiRequest(`/api/leads/${leadId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ profit_records: updatedProfits }),
+      });
+      await logAction(leadId, AuditAction.UPDATE, lead, { ...lead, profit_records: updatedProfits });
+      return newRecord;
+    } catch (error) {
+      console.error('API 添加利潤記錄失敗:', error);
+    }
+  }
+
+  const leads = getLeads();
+  const index = leads.findIndex(l => l.id === leadId);
+  if (index === -1) throw new Error('Lead not found');
+  leads[index].profit_records = [...(leads[index].profit_records || []), newRecord];
+  saveLeads(leads);
+  await logAction(leadId, AuditAction.UPDATE, leads[index], leads[index]);
+  return newRecord;
+};
+
+// 刪除利潤記錄
+export const deleteProfitRecord = async (leadId: string, profitId: string) => {
+  if (useApiMode()) {
+    try {
+      const currentLeads = await fetchLeadsFromApi();
+      const lead = currentLeads.find((l: Lead) => l.id === leadId);
+      if (!lead) throw new Error('Lead not found');
+      const updatedProfits = (lead.profit_records || []).filter(p => p.id !== profitId);
+      await apiRequest(`/api/leads/${leadId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ profit_records: updatedProfits }),
+      });
+      await logAction(leadId, AuditAction.UPDATE, lead, { ...lead, profit_records: updatedProfits });
+      return;
+    } catch (error) {
+      console.error('API 刪除利潤記錄失敗:', error);
+    }
+  }
+
+  const leads = getLeads();
+  const index = leads.findIndex(l => l.id === leadId);
+  if (index === -1) throw new Error('Lead not found');
+  leads[index].profit_records = (leads[index].profit_records || []).filter(p => p.id !== profitId);
+  saveLeads(leads);
+  await logAction(leadId, AuditAction.UPDATE, leads[index], leads[index]);
 };

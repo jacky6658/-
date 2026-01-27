@@ -1,6 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Lead, UserProfile, Role, CostRecord, ProfitRecord, Decision, LeadStatus } from '../types';
 import { DollarSign, TrendingUp, TrendingDown, BarChart3, PieChart, CheckCircle, XCircle, PlayCircle } from 'lucide-react';
+import CaseFinancialDetailModal from '../components/CaseFinancialDetailModal';
 
 interface AnalyticsPageProps {
   leads: Lead[];
@@ -8,6 +9,9 @@ interface AnalyticsPageProps {
 }
 
 const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ leads, userProfile }) => {
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+
   // 計算案件統計
   const dashboardStats = useMemo(() => {
     const rejected = leads.filter(l => l.decision === Decision.REJECT).length;
@@ -72,17 +76,6 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ leads, userProfile }) => 
       leadsWithProfits: Object.keys(profitByLead).length
     };
   }, [leads]);
-
-  if (userProfile.role !== Role.ADMIN) {
-    return (
-      <div className="max-w-4xl mx-auto">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
-          <h2 className="text-xl font-black text-slate-900 mb-2">權限不足</h2>
-          <p className="text-slate-500">只有管理員可以查看分析報表</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -236,7 +229,15 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ leads, userProfile }) => 
                   <tr key={lead.id} className="hover:bg-slate-50">
                     <td className="px-6 py-4">
                       <div>
-                        <p className="text-sm font-bold text-slate-900">{lead.platform_id}</p>
+                        <button
+                          onClick={() => {
+                            setSelectedLead(lead);
+                            setIsDetailModalOpen(true);
+                          }}
+                          className="text-sm font-bold text-slate-900 hover:text-indigo-600 transition-colors text-left"
+                        >
+                          {lead.case_code ? `${lead.case_code} - ` : ''}{lead.platform_id}
+                        </button>
                         <p className="text-xs text-slate-400">{lead.platform}</p>
                       </div>
                     </td>
@@ -329,6 +330,16 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ leads, userProfile }) => 
           </div>
         </div>
       )}
+
+      {/* 案件財務詳細視圖 */}
+      <CaseFinancialDetailModal
+        isOpen={isDetailModalOpen}
+        onClose={() => {
+          setIsDetailModalOpen(false);
+          setSelectedLead(null);
+        }}
+        lead={selectedLead}
+      />
     </div>
   );
 };

@@ -76,6 +76,10 @@ export interface Lead {
   email?: string;
   location?: string;
   
+  // 新增欄位
+  estimated_duration?: string; // 預計製作週期（例如：2週、1個月）
+  contact_method?: string; // 客戶聯繫方式（例如：電話、Email、Line等）
+  
   status: LeadStatus;
   decision: Decision;
   decision_by?: string; // 新增：審核人姓名
@@ -89,7 +93,7 @@ export interface Lead {
   created_by_name: string;
   created_at: string;
   updated_at: string;
-  last_action_by?: string;
+  last_action_by?: string; 
   
   // 進度更新和歷史記錄
   progress_updates?: ProgressUpdate[]; // 近期進度更新

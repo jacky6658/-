@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Lead, Platform, ContactStatus, LeadStatus, Role, ProgressUpdate, ChangeHistory, CostRecord, ProfitRecord } from '../types';
-import { CONTACT_STATUS_OPTIONS, PLATFORM_OPTIONS } from '../constants';
+import { CONTACT_STATUS_OPTIONS, PLATFORM_OPTIONS, DEFAULT_COST_ITEMS, PRO360_COST_ITEM } from '../constants';
 import { X, Upload, Sparkles, User, Loader2, Info, Plus, MessageSquare, Calendar, History, TrendingUp, Camera, Link as LinkIcon, Image as ImageIcon, DollarSign, TrendingDown, FileText } from 'lucide-react';
 import { extractLeadFromImage } from '../services/aiService';
-import { addProgressUpdate } from '../services/leadService';
+import { addProgressUpdate, addCostRecord, deleteCostRecord, addProfitRecord, deleteProfitRecord } from '../services/leadService';
 
 interface LeadModalProps {
   isOpen: boolean;
@@ -49,13 +49,23 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
     phone: '',
     email: '',
     location: '',
+    estimated_duration: '', // 預計製作週期
+    contact_method: '', // 客戶聯繫方式
     note: '',
     internal_remarks: '',
     posted_at: new Date().toISOString().split('T')[0],
     links: []
   });
 
+  // 使用 ref 來追蹤 Modal 是否剛打開
+  const prevIsOpenRef = useRef(false);
+  const prevInitialDataIdRef = useRef<string | null>(null);
+
   useEffect(() => {
+    // 只在 Modal 剛打開時（從關閉變為打開）重置進度相關狀態
+    const isModalJustOpened = !prevIsOpenRef.current && isOpen;
+    const isDifferentLead = prevInitialDataIdRef.current !== (propInitialData?.id || null);
+    
     if (initialData) {
       // 更新內部狀態
       setInitialData(initialData);
@@ -69,6 +79,8 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
         phone: initialData.phone || '',
         email: initialData.email || '',
         location: initialData.location || '',
+        estimated_duration: initialData.estimated_duration || '',
+        contact_method: initialData.contact_method || '',
         note: initialData.note || '',
         internal_remarks: initialData.internal_remarks || '',
         posted_at: initialData.posted_at ? initialData.posted_at.split('T')[0] : new Date().toISOString().split('T')[0]
@@ -86,6 +98,8 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
         phone: '',
         email: '',
         location: '',
+        estimated_duration: '',
+        contact_method: '',
         note: '',
         internal_remarks: '',
         posted_at: new Date().toISOString().split('T')[0],
@@ -93,11 +107,19 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
       });
       setIsAiFilled(false);
     }
-    setProgressContent('');
-    setProgressAttachments([]);
-    setProgressUrlInput('');
-    setShowHistory(false);
-  }, [initialData, isOpen]);
+    
+    // 只在 Modal 剛打開或切換到不同案件時才重置進度相關狀態
+    if (isModalJustOpened || isDifferentLead) {
+      setProgressContent('');
+      setProgressAttachments([]);
+      setProgressUrlInput('');
+      setShowHistory(false);
+    }
+    
+    // 更新 ref 值
+    prevIsOpenRef.current = isOpen;
+    prevInitialDataIdRef.current = propInitialData?.id || null;
+  }, [propInitialData, isOpen]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -406,7 +428,7 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
   const contractFileInputRef = useRef<HTMLInputElement>(null);
 
   // 添加成本記錄
-  const handleAddCost = () => {
+  const handleAddCost = async () => {
     if (!costItemName.trim() || !costAmount || !initialData?.id) return;
     const amount = parseFloat(costAmount);
     if (isNaN(amount) || amount <= 0) {
@@ -414,29 +436,33 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
       return;
     }
 
-    const newCost: CostRecord = {
-      id: 'cost_' + Math.random().toString(36).substr(2, 9),
-      lead_id: initialData.id,
-      item_name: costItemName.trim(),
-      amount: amount,
-      author_uid: userRole === Role.ADMIN ? 'admin' : 'user',
-      author_name: userName,
-      created_at: new Date().toISOString(),
-      note: costNote.trim() || undefined
-    };
+    try {
+      const newCost = await addCostRecord(initialData.id, {
+        item_name: costItemName.trim(),
+        amount: amount,
+        author_uid: userRole === Role.ADMIN ? 'admin' : 'user',
+        author_name: userName,
+        note: costNote.trim() || undefined
+      });
 
-    const updatedCosts = [...(initialData.cost_records || []), newCost];
-    const updatedLead = { ...initialData, cost_records: updatedCosts };
-    setInitialData(updatedLead);
-    onSubmit({ cost_records: updatedCosts });
+      if (newCost) {
+        const updatedCosts = [...(initialData.cost_records || []), newCost];
+        const updatedLead = { ...initialData, cost_records: updatedCosts };
+        setInitialData(updatedLead);
+        onSubmit({ cost_records: updatedCosts });
 
-    setCostItemName('');
-    setCostAmount('');
-    setCostNote('');
+        setCostItemName('');
+        setCostAmount('');
+        setCostNote('');
+      }
+    } catch (error) {
+      console.error('添加成本記錄失敗:', error);
+      alert('添加成本記錄失敗');
+    }
   };
 
   // 添加利潤記錄
-  const handleAddProfit = () => {
+  const handleAddProfit = async () => {
     if (!profitItemName.trim() || !profitAmount || !initialData?.id) return;
     const amount = parseFloat(profitAmount);
     if (isNaN(amount) || amount <= 0) {
@@ -444,25 +470,29 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
       return;
     }
 
-    const newProfit: ProfitRecord = {
-      id: 'profit_' + Math.random().toString(36).substr(2, 9),
-      lead_id: initialData.id,
-      item_name: profitItemName.trim(),
-      amount: amount,
-      author_uid: userRole === Role.ADMIN ? 'admin' : 'user',
-      author_name: userName,
-      created_at: new Date().toISOString(),
-      note: profitNote.trim() || undefined
-    };
+    try {
+      const newProfit = await addProfitRecord(initialData.id, {
+        item_name: profitItemName.trim(),
+        amount: amount,
+        author_uid: userRole === Role.ADMIN ? 'admin' : 'user',
+        author_name: userName,
+        note: profitNote.trim() || undefined
+      });
 
-    const updatedProfits = [...(initialData.profit_records || []), newProfit];
-    const updatedLead = { ...initialData, profit_records: updatedProfits };
-    setInitialData(updatedLead);
-    onSubmit({ profit_records: updatedProfits });
+      if (newProfit) {
+        const updatedProfits = [...(initialData.profit_records || []), newProfit];
+        const updatedLead = { ...initialData, profit_records: updatedProfits };
+        setInitialData(updatedLead);
+        onSubmit({ profit_records: updatedProfits });
 
-    setProfitItemName('');
-    setProfitAmount('');
-    setProfitNote('');
+        setProfitItemName('');
+        setProfitAmount('');
+        setProfitNote('');
+      }
+    } catch (error) {
+      console.error('添加利潤記錄失敗:', error);
+      alert('添加利潤記錄失敗');
+    }
   };
 
   // 處理合約文件上傳
@@ -507,27 +537,39 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
   };
 
   // 刪除成本記錄（僅 Admin）
-  const handleDeleteCost = (costId: string) => {
+  const handleDeleteCost = async (costId: string) => {
     if (userRole !== Role.ADMIN) return;
     if (!window.confirm('確定要刪除此成本記錄嗎？')) return;
     
     if (!initialData?.id) return;
-    const updatedCosts = (initialData.cost_records || []).filter(c => c.id !== costId);
-    const updatedLead = { ...initialData, cost_records: updatedCosts };
-    setInitialData(updatedLead);
-    onSubmit({ cost_records: updatedCosts });
+    try {
+      await deleteCostRecord(initialData.id, costId);
+      const updatedCosts = (initialData.cost_records || []).filter(c => c.id !== costId);
+      const updatedLead = { ...initialData, cost_records: updatedCosts };
+      setInitialData(updatedLead);
+      onSubmit({ cost_records: updatedCosts });
+    } catch (error) {
+      console.error('刪除成本記錄失敗:', error);
+      alert('刪除成本記錄失敗');
+    }
   };
 
   // 刪除利潤記錄（僅 Admin）
-  const handleDeleteProfit = (profitId: string) => {
+  const handleDeleteProfit = async (profitId: string) => {
     if (userRole !== Role.ADMIN) return;
     if (!window.confirm('確定要刪除此利潤記錄嗎？')) return;
     
     if (!initialData?.id) return;
-    const updatedProfits = (initialData.profit_records || []).filter(p => p.id !== profitId);
-    const updatedLead = { ...initialData, profit_records: updatedProfits };
-    setInitialData(updatedLead);
-    onSubmit({ profit_records: updatedProfits });
+    try {
+      await deleteProfitRecord(initialData.id, profitId);
+      const updatedProfits = (initialData.profit_records || []).filter(p => p.id !== profitId);
+      const updatedLead = { ...initialData, profit_records: updatedProfits };
+      setInitialData(updatedLead);
+      onSubmit({ profit_records: updatedProfits });
+    } catch (error) {
+      console.error('刪除利潤記錄失敗:', error);
+      alert('刪除利潤記錄失敗');
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -706,38 +748,38 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
               </div>
             )}
 
-                {/* 基本欄位 */}
-                <section className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="space-y-2">
-                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">來源平台</label>
-                    <select 
+            {/* 基本欄位 */}
+            <section className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="space-y-2">
+                <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">來源平台</label>
+                <select 
                       className={`w-full rounded-2xl border-2 p-4 font-black transition-all appearance-none ${isAiFilled ? 'border-indigo-200 bg-indigo-50/30' : 'border-slate-100 bg-slate-50 focus:bg-white focus:border-indigo-500'} text-slate-800`}
-                      value={formData.platform}
-                      onChange={(e) => setFormData({ ...formData, platform: e.target.value as Platform })}
-                    >
-                      {PLATFORM_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                    </select>
-                  </div>
-                  <div className="space-y-2">
+                  value={formData.platform}
+                  onChange={(e) => setFormData({ ...formData, platform: e.target.value as Platform })}
+                >
+                  {PLATFORM_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
+              </div>
+              <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">對方 ID / 名稱</label>
+                <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">對方 ID / 名稱</label>
                       {initialData?.case_code && (
                         <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full">
                           {initialData.case_code}
                         </span>
                       )}
                     </div>
-                    <input 
-                      type="text" 
-                      placeholder="例如：王小明"
+                <input 
+                  type="text" 
+                  placeholder="例如：王小明"
                       className={`w-full rounded-2xl border-2 p-4 font-bold transition-all ${isAiFilled ? 'border-indigo-200 bg-indigo-50/30' : 'border-slate-100 bg-slate-50 focus:bg-white focus:border-indigo-500'} text-slate-800`}
                       value={formData.platform_id || ''}
-                      onChange={(e) => setFormData({ ...formData, platform_id: e.target.value })}
-                    />
-                  </div>
-                </section>
+                  onChange={(e) => setFormData({ ...formData, platform_id: e.target.value })}
+                />
+              </div>
+            </section>
 
-            {/* 時間與聯絡 */}
+            {/* 時間與預算 */}
             <section className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="space-y-2">
                 <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">
@@ -754,6 +796,64 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
               <div className="space-y-2">
                 <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">預算狀況</label>
                 <input type="text" placeholder="例如：1萬以下" className={`w-full rounded-2xl border-2 p-4 font-black transition-all ${isAiFilled ? 'border-indigo-200 bg-indigo-50/30' : 'border-slate-100 bg-slate-50 focus:bg-white focus:border-indigo-500'} text-slate-800`} value={formData.budget_text || ''} onChange={(e) => setFormData({ ...formData, budget_text: e.target.value })} />
+              </div>
+            </section>
+
+            {/* 預計製作週期與客戶聯繫方式 */}
+            <section className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="space-y-2">
+                <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">預計製作週期</label>
+                <input 
+                  type="text" 
+                  placeholder="例如：2週、1個月、3個月"
+                  className={`w-full rounded-2xl border-2 p-4 font-black transition-all ${isAiFilled ? 'border-indigo-200 bg-indigo-50/30' : 'border-slate-100 bg-slate-50 focus:bg-white focus:border-indigo-500'} text-slate-800`}
+                  value={formData.estimated_duration || ''}
+                  onChange={(e) => setFormData({ ...formData, estimated_duration: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">客戶聯繫方式</label>
+                <input 
+                  type="text" 
+                  placeholder="例如：電話、Email、Line、Facebook"
+                  className={`w-full rounded-2xl border-2 p-4 font-black transition-all ${isAiFilled ? 'border-indigo-200 bg-indigo-50/30' : 'border-slate-100 bg-slate-50 focus:bg-white focus:border-indigo-500'} text-slate-800`}
+                  value={formData.contact_method || ''}
+                  onChange={(e) => setFormData({ ...formData, contact_method: e.target.value })}
+                />
+              </div>
+            </section>
+
+            {/* 聯絡資訊（電話、Email、地點） */}
+            <section className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              <div className="space-y-2">
+                <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">電話</label>
+                <input 
+                  type="tel" 
+                  placeholder="例如：0912-345-678"
+                  className={`w-full rounded-2xl border-2 p-4 font-black transition-all ${isAiFilled ? 'border-indigo-200 bg-indigo-50/30' : 'border-slate-100 bg-slate-50 focus:bg-white focus:border-indigo-500'} text-slate-800`}
+                  value={formData.phone || ''}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Email</label>
+                <input 
+                  type="email" 
+                  placeholder="例如：example@email.com"
+                  className={`w-full rounded-2xl border-2 p-4 font-black transition-all ${isAiFilled ? 'border-indigo-200 bg-indigo-50/30' : 'border-slate-100 bg-slate-50 focus:bg-white focus:border-indigo-500'} text-slate-800`}
+                  value={formData.email || ''}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">地點</label>
+                <input 
+                  type="text" 
+                  placeholder="例如：台北市"
+                  className={`w-full rounded-2xl border-2 p-4 font-black transition-all ${isAiFilled ? 'border-indigo-200 bg-indigo-50/30' : 'border-slate-100 bg-slate-50 focus:bg-white focus:border-indigo-500'} text-slate-800`}
+                  value={formData.location || ''}
+                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                />
               </div>
             </section>
 
@@ -1019,6 +1119,23 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
                     <h3 className="text-sm font-black uppercase tracking-widest text-red-900">成本記錄</h3>
                   </div>
                   
+                  {/* 快速添加預設成本名目 */}
+                  <div className="mb-4">
+                    <p className="text-xs font-black text-red-700 uppercase tracking-widest mb-2">快速添加</p>
+                    <div className="flex flex-wrap gap-2">
+                      {DEFAULT_COST_ITEMS.map((item) => (
+                        <button
+                          key={item}
+                          type="button"
+                          onClick={() => setCostItemName(item)}
+                          className="px-3 py-1.5 bg-white border-2 border-red-200 text-red-700 rounded-lg text-xs font-bold hover:bg-red-50 hover:border-red-300 transition-all"
+                        >
+                          {item}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   <div className="space-y-3 mb-4">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                       <input
@@ -1027,7 +1144,13 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
                         className="rounded-xl border-2 border-red-200 bg-white p-3 text-sm font-medium focus:ring-2 focus:ring-red-500"
                         value={costItemName}
                         onChange={(e) => setCostItemName(e.target.value)}
+                        list="cost-items"
                       />
+                      <datalist id="cost-items">
+                        {DEFAULT_COST_ITEMS.map((item) => (
+                          <option key={item} value={item} />
+                        ))}
+                      </datalist>
                       <input
                         type="number"
                         placeholder="金額"

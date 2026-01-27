@@ -49,7 +49,7 @@ const App: React.FC = () => {
             try {
               const p = JSON.parse(savedProfile);
               if (p.uid === u.uid) {
-                setProfile(p);
+        setProfile(p);
                 await setUserOnline(p.uid);
               }
             } catch (e) {
@@ -99,6 +99,17 @@ const App: React.FC = () => {
     }
   }, [user]);
 
+  // 權限保護：如果非管理員用戶嘗試訪問受限頁面，自動重定向
+  useEffect(() => {
+    if (!profile) return;
+    
+    const adminOnlyTabs = ['members', 'import', 'migration'];
+    if (adminOnlyTabs.includes(activeTab) && profile.role !== Role.ADMIN) {
+      // 非管理員嘗試訪問管理員專用頁面，重定向到案件總表
+      setActiveTab('leads');
+    }
+  }, [activeTab, profile]);
+
   const handleLogout = async () => {
     if (profile) {
       await setUserOffline(profile.uid);
@@ -133,10 +144,48 @@ const App: React.FC = () => {
       case 'review': return <ReviewPage leads={leads} userProfile={profile} />;
       case 'kanban': return <KanbanPage leads={leads} userProfile={profile} />;
       case 'audit': return <AuditLogsPage leads={leads} userProfile={profile} />;
-      case 'members': return <MembersPage userProfile={profile} />;
-      case 'import': return <ImportPage userProfile={profile} />;
-      case 'analytics': return <AnalyticsPage leads={leads} userProfile={profile} />;
-      case 'migration': return <MigrationPage userProfile={profile} />;
+      case 'members': 
+        // 只有管理員可以訪問成員管理
+        if (profile.role !== Role.ADMIN) {
+          return (
+            <div className="max-w-4xl mx-auto">
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
+                <h2 className="text-xl font-black text-slate-900 mb-2">權限不足</h2>
+                <p className="text-slate-500">只有管理員可以訪問此頁面</p>
+              </div>
+            </div>
+          );
+        }
+        return <MembersPage userProfile={profile} />;
+      case 'import': 
+        // 只有管理員可以訪問匯入案件
+        if (profile.role !== Role.ADMIN) {
+          return (
+            <div className="max-w-4xl mx-auto">
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
+                <h2 className="text-xl font-black text-slate-900 mb-2">權限不足</h2>
+                <p className="text-slate-500">只有管理員可以訪問此頁面</p>
+              </div>
+            </div>
+          );
+        }
+        return <ImportPage userProfile={profile} />;
+      case 'analytics': 
+        // 所有用戶都可以查看財務分析
+        return <AnalyticsPage leads={leads} userProfile={profile} />;
+      case 'migration': 
+        // 只有管理員可以訪問資料遷移
+        if (profile.role !== Role.ADMIN) {
+          return (
+            <div className="max-w-4xl mx-auto">
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
+                <h2 className="text-xl font-black text-slate-900 mb-2">權限不足</h2>
+                <p className="text-slate-500">只有管理員可以訪問此頁面</p>
+              </div>
+            </div>
+          );
+        }
+        return <MigrationPage userProfile={profile} />;
       default: return <LeadsPage leads={leads} userProfile={profile} />;
     }
   };
@@ -147,7 +196,7 @@ const App: React.FC = () => {
         activeTab={activeTab} 
         setActiveTab={setActiveTab} 
         profile={profile} 
-        onLogout={handleLogout}
+        onLogout={handleLogout} 
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
       />
@@ -165,16 +214,16 @@ const App: React.FC = () => {
               </button>
               <div className="flex flex-col min-w-0 flex-1">
                 <h1 className="text-base sm:text-lg md:text-xl font-black text-slate-900 tracking-tight truncate">
-                  {activeTab === 'leads' ? '案件總表' : 
-                   activeTab === 'review' ? '待我審核' :
-                   activeTab === 'kanban' ? '流程看板' :
-                   activeTab === 'audit' ? '操作紀錄' :
+              {activeTab === 'leads' ? '案件總表' : 
+               activeTab === 'review' ? '待我審核' :
+               activeTab === 'kanban' ? '流程看板' :
+               activeTab === 'audit' ? '操作紀錄' :
                    activeTab === 'members' ? '成員管理' : 
                    activeTab === 'import' ? '匯入案件' :
                    activeTab === 'migration' ? '資料遷移' : '案件總表'}
-                </h1>
+            </h1>
                 <p className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] sm:tracking-[0.2em] mt-0.5 hidden sm:block">Collaborative Workspace</p>
-              </div>
+          </div>
             </div>
 
             {/* 右側：在線成員 + 當前用戶 */}
@@ -241,11 +290,11 @@ const App: React.FC = () => {
                 )}
                 <div className="flex flex-col pr-1 sm:pr-2 hidden sm:block">
                   <span className="text-[10px] sm:text-xs font-black text-slate-800 leading-none truncate max-w-[80px] md:max-w-none">
-                    {profile.displayName}
-                  </span>
+                {profile.displayName}
+              </span>
                   <span className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase mt-0.5 sm:mt-1 truncate max-w-[80px] md:max-w-none">
                     {profile.status || profile.role}
-                  </span>
+              </span>
                 </div>
               </div>
             </div>

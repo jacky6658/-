@@ -1,25 +1,29 @@
+import { Platform, ContactStatus, LeadStatus, Decision, RejectReason } from './types';
 
-import { ContactStatus, Platform, LeadStatus, Decision, RejectReason } from './types';
+export const PLATFORM_OPTIONS = Object.values(Platform);
 
 export const CONTACT_STATUS_OPTIONS = Object.values(ContactStatus);
-export const PLATFORM_OPTIONS = Object.values(Platform);
-export const STATUS_OPTIONS = Object.values(LeadStatus);
-export const DECISION_OPTIONS = Object.values(Decision);
-export const REJECT_REASON_OPTIONS = Object.values(RejectReason);
 
 export const STATUS_COLORS: Record<LeadStatus, string> = {
-  [LeadStatus.TO_IMPORT]: 'bg-gray-100 text-gray-700',
-  [LeadStatus.TO_FILTER]: 'bg-blue-100 text-blue-700',
-  [LeadStatus.CONTACTED]: 'bg-cyan-100 text-cyan-700',
-  [LeadStatus.QUOTING]: 'bg-indigo-100 text-indigo-700',
-  [LeadStatus.IN_PROGRESS]: 'bg-purple-100 text-purple-700',
-  [LeadStatus.WON]: 'bg-emerald-100 text-emerald-700',
-  [LeadStatus.CLOSED]: 'bg-slate-100 text-slate-700',
-  [LeadStatus.REJECTED]: 'bg-red-100 text-red-700',
+  [LeadStatus.TO_IMPORT]: 'text-slate-500 bg-slate-50',
+  [LeadStatus.TO_FILTER]: 'text-amber-600 bg-amber-50',
+  [LeadStatus.CONTACTED]: 'text-blue-600 bg-blue-50',
+  [LeadStatus.QUOTING]: 'text-purple-600 bg-purple-50',
+  [LeadStatus.IN_PROGRESS]: 'text-indigo-600 bg-indigo-50',
+  [LeadStatus.WON]: 'text-emerald-600 bg-emerald-50',
+  [LeadStatus.CLOSED]: 'text-gray-600 bg-gray-50',
+  [LeadStatus.REJECTED]: 'text-red-600 bg-red-50'
 };
 
-export const DECISION_COLORS: Record<Decision, string> = {
-  [Decision.ACCEPT]: 'bg-green-100 text-green-700',
-  [Decision.REJECT]: 'bg-red-100 text-red-700',
-  [Decision.PENDING]: 'bg-amber-100 text-amber-700',
-};
+// 預設成本名目
+export const DEFAULT_COST_ITEMS = [
+  'gemini AI 使用費用',
+  'cursor 開發軟體費用',
+  'zeabur 雲端部署費用',
+  '預估人力費用',
+  'Pro360 索取個資成本'
+];
+
+// Pro360 成本名目
+export const PRO360_COST_ITEM = 'Pro360 接案費用';
+export const PRO360_CONTACT_COST_ITEM = 'Pro360 索取個資成本';
