@@ -31,11 +31,11 @@ const MembersPage: React.FC<MembersPageProps> = ({ userProfile }) => {
     loadUsers();
   }, []);
 
-  const loadUsers = async () => {
-    const data = await getAllUsers();
-    setUsers(data);
-    setLoading(false);
-  };
+    const loadUsers = async () => {
+      const data = await getAllUsers();
+      setUsers(data);
+      setLoading(false);
+    };
 
   const handleToggleRole = async (uid: string, currentRole: Role) => {
     if (uid === userProfile.uid) return;
@@ -270,17 +270,17 @@ const MembersPage: React.FC<MembersPageProps> = ({ userProfile }) => {
                   </>
                 )}
                 {!isAdmin && user.uid !== userProfile.uid && (
-                  <button 
-                    onClick={() => handleToggleRole(user.uid, user.role)}
+                <button 
+                  onClick={() => handleToggleRole(user.uid, user.role)}
                     className="px-4 py-2 text-xs font-bold border border-gray-200 rounded-lg hover:border-indigo-500 hover:text-indigo-600 transition-all flex items-center gap-2 opacity-0 group-hover:opacity-100"
-                  >
-                    切換角色
-                    <ChevronRight size={14} />
-                  </button>
-                )}
+                >
+                  切換角色
+                  <ChevronRight size={14} />
+                </button>
+              )}
                 {user.uid === userProfile.uid && (
                   <span className="text-xs text-gray-400 italic font-medium px-4">目前登入</span>
-                )}
+              )}
               </div>
             </div>
           ))}

@@ -89,15 +89,24 @@ export const createLead = async (leadData: Partial<Lead>) => {
   // 如果使用 API 模式，先調用 API
   if (useApiMode()) {
     try {
-      await apiRequest('/api/leads', {
+      const response = await apiRequest('/api/leads', {
         method: 'POST',
         body: JSON.stringify(newLead),
       });
       await logAction(id, AuditAction.CREATE, null, newLead);
       return id;
-    } catch (error) {
-      console.error('API 創建失敗，降級到 localStorage:', error);
-      // 降級到 localStorage
+    } catch (error: any) {
+      console.error('❌ API 創建案件失敗，降級到 localStorage:', error);
+      console.error('錯誤詳情:', {
+        message: error.message,
+        name: error.name,
+        stack: error.stack
+      });
+      // 降級到 localStorage，但顯示警告
+      if (error.message && !error.message.includes('降級')) {
+        console.warn('⚠️ 將使用 localStorage 模式保存案件，但資料不會同步到雲端');
+      }
+      // 繼續執行 localStorage 模式
     }
   }
 

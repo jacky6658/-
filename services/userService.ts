@@ -269,6 +269,7 @@ export const updateUserProfile = async (uid: string, updates: Partial<UserProfil
   // 如果使用 API 模式
   if (useApiMode()) {
     try {
+      // 確保不會因為 API 失敗而中斷流程
       const updated = await apiRequest(`/api/users/${uid}`, {
         method: 'PUT',
         body: JSON.stringify(updates),
@@ -281,9 +282,15 @@ export const updateUserProfile = async (uid: string, updates: Partial<UserProfil
       }
       
       return updated;
-    } catch (error) {
-      console.error('❌ API 更新使用者失敗，降級到 localStorage:', error);
-      // 降級到 localStorage
+    } catch (error: any) {
+      // 詳細記錄錯誤，但不中斷流程
+      console.error('❌ API 更新使用者失敗，降級到 localStorage:', {
+        uid,
+        error: error?.message || error?.name || '未知錯誤',
+        errorType: error?.name,
+        url: error?.url || '未知'
+      });
+      // 降級到 localStorage，繼續執行
     }
   }
   

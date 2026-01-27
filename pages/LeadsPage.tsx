@@ -304,7 +304,7 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
                     <td className="px-4 sm:px-6 py-4 sm:py-6 whitespace-nowrap">
                       <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-black text-indigo-600">{lead.platform}</span>
+                        <span className="text-xs font-black text-indigo-600">{lead.platform}</span>
                           {lead.links && lead.links.length > 0 && (
                             <div className="flex items-center gap-1 text-emerald-600" title={`有 ${lead.links.length} 個附件`}>
                               <Paperclip size={12} className="text-emerald-500" />
@@ -313,7 +313,7 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
                           )}
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold text-slate-900">{lead.platform_id}</span>
+                        <span className="text-sm font-bold text-slate-900">{lead.platform_id}</span>
                           {lead.case_code && (
                             <span className="text-[10px] font-black text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
                               {lead.case_code}

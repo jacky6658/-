@@ -152,7 +152,7 @@ const LoginPage: React.FC = () => {
                 <div className="absolute inset-0 bg-indigo-500 opacity-0 group-active:opacity-20 transition-opacity duration-150 rounded-2xl sm:rounded-3xl"></div>
               </div>
             ))}
-          </div>
+              </div>
         )}
 
         {error && !loading && (
@@ -161,9 +161,9 @@ const LoginPage: React.FC = () => {
               <AlertCircle className="text-red-500 shrink-0 mt-0.5 w-3.5 h-3.5 sm:w-4 sm:h-4" />
               <p className="text-xs text-red-600 font-medium">{error}</p>
             </div>
-          </div>
-        )}
-        
+              </div>
+            )}
+
         <div className="mt-8 sm:mt-12 text-center text-[9px] sm:text-[10px] font-black text-slate-300 uppercase tracking-[0.2em] sm:tracking-[0.3em] px-4">
           AI案件管理系統 v3.0.0
         </div>

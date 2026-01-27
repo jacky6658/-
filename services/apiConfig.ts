@@ -74,7 +74,33 @@ export const apiRequest = async (
       console.error(`❌ API 請求超時（超過 10 秒）:`, url);
       throw new Error('API 請求超時，請檢查網路連接或後端服務狀態');
     }
-    console.error(`❌ API 請求異常:`, error);
-    throw error;
+    
+    // 更詳細的錯誤訊息
+    let errorMessage = 'API 請求失敗';
+    if (error.message) {
+      errorMessage = error.message;
+    } else if (error.name === 'TypeError') {
+      // Safari 和某些瀏覽器在網路錯誤時會拋出 TypeError
+      if (error.message?.includes('Load failed') || error.message?.includes('Failed to fetch')) {
+        errorMessage = `無法連接到後端服務 (${url})。請檢查：\n1. 後端服務是否正在運行\n2. API URL 是否正確配置\n3. 網路連接是否正常\n4. CORS 設定是否正確\n5. 是否為混合內容問題（HTTPS 頁面請求 HTTP API）`;
+      } else {
+        errorMessage = `網路請求錯誤: ${error.message || error.name}`;
+      }
+    }
+    
+    console.error(`❌ API 請求異常:`, {
+      url,
+      method: options.method || 'GET',
+      error: errorMessage,
+      errorType: error.name,
+      errorMessage: error.message,
+      errorStack: error.stack
+    });
+    
+    // 創建一個包含更多資訊的錯誤對象
+    const enhancedError = new Error(errorMessage);
+    (enhancedError as any).originalError = error;
+    (enhancedError as any).url = url;
+    throw enhancedError;
   }
 };

@@ -255,14 +255,23 @@ const MigrationPage: React.FC<MigrationPageProps> = ({ userProfile }) => {
             快速自動匯入（推薦）
           </h3>
           <p className="text-sm text-green-800 mb-4">
-            點擊「⚡ 一鍵自動匯入」按鈕，系統會自動將本地資料匯入到雲端資料庫，無需手動執行 SQL！
+            點擊「⚡ 一鍵自動匯入」按鈕，系統會自動將<strong>當前瀏覽器本地</strong>的資料匯入到雲端資料庫，無需手動執行 SQL！
           </p>
-          <div className="bg-white rounded-xl p-4 border border-green-200">
+          <div className="bg-white rounded-xl p-4 border border-green-200 mb-3">
             <p className="text-xs text-green-700 font-bold mb-2">📋 使用條件：</p>
             <ul className="list-disc list-inside space-y-1 text-xs text-green-800">
               <li>已設置 <code className="bg-green-100 px-1 rounded">VITE_API_URL</code> 環境變數</li>
               <li>後端服務已正常運行並連接到資料庫</li>
               <li>資料表已建立（如果沒有，請先執行下方的建表語句）</li>
+            </ul>
+          </div>
+          <div className="bg-amber-50 rounded-xl p-4 border border-amber-200">
+            <p className="text-xs text-amber-700 font-bold mb-2">⚠️ 重要提醒：</p>
+            <ul className="list-disc list-inside space-y-1 text-xs text-amber-800">
+              <li>匯入的是<strong>當前瀏覽器本地</strong>保存的資料，不是雲端資料庫的資料</li>
+              <li>如果雲端已有相同 ID 的案件，會<strong>跳過不覆蓋</strong>（使用 ON CONFLICT DO NOTHING）</li>
+              <li>如果雲端有新案件但本地沒有，這些案件<strong>不會被匯入</strong></li>
+              <li>建議在首次部署時使用，後續直接在雲端操作即可</li>
             </ul>
           </div>
         </div>
