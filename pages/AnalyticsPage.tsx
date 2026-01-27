@@ -226,15 +226,23 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ leads, userProfile }) => 
                 if (leadCost === 0 && leadProfit === 0) return null;
                 
                 return (
-                  <tr key={lead.id} className="hover:bg-slate-50">
+                  <tr 
+                    key={lead.id} 
+                    className="hover:bg-slate-50 cursor-pointer"
+                    onClick={() => {
+                      setSelectedLead(lead);
+                      setIsDetailModalOpen(true);
+                    }}
+                  >
                     <td className="px-6 py-4">
                       <div>
                         <button
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             setSelectedLead(lead);
                             setIsDetailModalOpen(true);
                           }}
-                          className="text-sm font-bold text-slate-900 hover:text-indigo-600 transition-colors text-left"
+                          className="text-sm font-bold text-slate-900 hover:text-indigo-600 transition-colors text-left cursor-pointer"
                         >
                           {lead.case_code ? `${lead.case_code} - ` : ''}{lead.platform_id}
                         </button>
@@ -283,7 +291,7 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ leads, userProfile }) => 
             {Object.entries(analytics.costByItem)
               .sort(([, a], [, b]) => b - a)
               .map(([item, amount]) => {
-                const percentage = ((amount / analytics.totalCost) * 100).toFixed(1);
+                const percentage = analytics.totalCost > 0 ? ((amount / analytics.totalCost) * 100).toFixed(1) : '0.0';
                 return (
                   <div key={item} className="space-y-2">
                     <div className="flex items-center justify-between">
@@ -293,7 +301,7 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ leads, userProfile }) => 
                     <div className="w-full bg-gray-100 rounded-full h-2">
                       <div
                         className="bg-red-500 h-2 rounded-full transition-all"
-                        style={{ width: `${percentage}%` }}
+                        style={{ width: `${Math.min(parseFloat(percentage), 100)}%` }}
                       />
                     </div>
                   </div>
@@ -311,7 +319,7 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ leads, userProfile }) => 
             {Object.entries(analytics.profitByItem)
               .sort(([, a], [, b]) => b - a)
               .map(([item, amount]) => {
-                const percentage = ((amount / analytics.totalProfit) * 100).toFixed(1);
+                const percentage = analytics.totalProfit > 0 ? ((amount / analytics.totalProfit) * 100).toFixed(1) : '0.0';
                 return (
                   <div key={item} className="space-y-2">
                     <div className="flex items-center justify-between">
@@ -321,7 +329,7 @@ const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ leads, userProfile }) => 
                     <div className="w-full bg-gray-100 rounded-full h-2">
                       <div
                         className="bg-green-500 h-2 rounded-full transition-all"
-                        style={{ width: `${percentage}%` }}
+                        style={{ width: `${Math.min(parseFloat(percentage), 100)}%` }}
                       />
                     </div>
                   </div>

@@ -59,18 +59,160 @@ const generateCaseCode = async (): Promise<string> => {
   return `aijob-${String(nextNumber).padStart(3, '0')}`;
 };
 
-export const createLead = async (leadData: Partial<Lead>) => {
+// 檢查重複案件
+const checkDuplicateLead = async (leadData: Partial<Lead>): Promise<Lead | null> => {
+  let allLeads: Lead[] = [];
+  
+  // 獲取所有案件
+  if (useApiMode()) {
+    try {
+      allLeads = await fetchLeadsFromApi();
+    } catch (error) {
+      console.error('獲取案件列表失敗，使用 localStorage:', error);
+      allLeads = getLeads();
+    }
+  } else {
+    allLeads = getLeads();
+  }
+  
+  // 檢查重複的標準：
+  // 1. 相同的 platform + platform_id（最嚴格）
+  // 2. 或者相同的 platform + phone（如果有電話）
+  // 3. 或者相同的 platform + email（如果有郵件）
+  const platform = leadData.platform;
+  const platformId = leadData.platform_id?.trim().toLowerCase();
+  const phone = leadData.phone?.trim();
+  const email = leadData.email?.trim().toLowerCase();
+  
+  if (!platform || !platformId) {
+    return null; // 如果沒有平台和ID，無法判斷重複
+  }
+  
+  // 查找重複案件
+  const duplicate = allLeads.find(lead => {
+    // 主要匹配：相同的 platform + platform_id
+    if (lead.platform === platform && 
+        lead.platform_id?.trim().toLowerCase() === platformId) {
+      return true;
+    }
+    
+    // 次要匹配：相同的 platform + phone（如果都有電話）
+    if (phone && lead.platform === platform && lead.phone?.trim() === phone) {
+      return true;
+    }
+    
+    // 次要匹配：相同的 platform + email（如果都有郵件）
+    if (email && lead.platform === platform && lead.email?.trim().toLowerCase() === email) {
+      return true;
+    }
+    
+    return false;
+  });
+  
+  return duplicate || null;
+};
+
+// 合併案件數據
+const mergeLeads = (existing: Lead, newData: Partial<Lead>): Lead => {
+  // 合併邏輯：保留現有案件的數據，但用新數據填充空欄位
+  const merged: Lead = {
+    ...existing,
+    // 如果新數據有值且現有數據為空，則使用新數據
+    need: existing.need || newData.need || '',
+    budget_text: existing.budget_text || newData.budget_text || '',
+    phone: existing.phone || newData.phone || undefined,
+    email: existing.email || newData.email || undefined,
+    location: existing.location || newData.location || undefined,
+    estimated_duration: existing.estimated_duration || newData.estimated_duration || undefined,
+    contact_method: existing.contact_method || newData.contact_method || undefined,
+    note: existing.note || newData.note || '',
+    // 合併 links（去重）
+    links: [...new Set([...(existing.links || []), ...(newData.links || [])])],
+    // 合併成本記錄（去重，基於 item_name）
+    cost_records: mergeCostRecords(existing.cost_records || [], newData.cost_records || []),
+    // 合併利潤記錄（去重，基於 item_name）
+    profit_records: mergeProfitRecords(existing.profit_records || [], newData.profit_records || []),
+    // 更新時間
+    updated_at: new Date().toISOString(),
+    last_action_by: newData.created_by_name || existing.last_action_by
+  };
+  
+  return merged;
+};
+
+// 合併成本記錄
+const mergeCostRecords = (existing: CostRecord[], newRecords: CostRecord[]): CostRecord[] => {
+  const merged = [...existing];
+  newRecords.forEach(newRecord => {
+    // 如果不存在相同 item_name 的記錄，則添加
+    if (!merged.find(r => r.item_name === newRecord.item_name)) {
+      merged.push(newRecord);
+    }
+  });
+  return merged;
+};
+
+// 合併利潤記錄
+const mergeProfitRecords = (existing: ProfitRecord[], newRecords: ProfitRecord[]): ProfitRecord[] => {
+  const merged = [...existing];
+  newRecords.forEach(newRecord => {
+    // 如果不存在相同 item_name 的記錄，則添加
+    if (!merged.find(r => r.item_name === newRecord.item_name)) {
+      merged.push(newRecord);
+    }
+  });
+  return merged;
+};
+
+export const createLead = async (leadData: Partial<Lead>, mergeIfDuplicate: boolean = false): Promise<{ success: boolean; leadId: string; isDuplicate: boolean; existingLead?: Lead }> => {
   const user = auth.currentUser;
   if (!user) throw new Error('Unauthorized');
+  
+  // 檢查重複
+  const duplicate = await checkDuplicateLead(leadData);
+  
+  if (duplicate && !mergeIfDuplicate) {
+    // 發現重複，但不合併，返回重複信息
+    return {
+      success: false,
+      leadId: duplicate.id,
+      isDuplicate: true,
+      existingLead: duplicate
+    };
+  }
   
   const profile = await getUserProfile(user.uid);
   const creatorName = profile?.displayName || 'Unknown';
   
   const now = new Date().toISOString();
-  const id = 'lead_' + Math.random().toString(36).substr(2, 9);
   
-  // 生成案件編號
-  const caseCode = await generateCaseCode();
+  // 如果是合併模式，使用現有案件的 ID 和 case_code
+  let id: string;
+  let caseCode: string;
+  
+  if (duplicate && mergeIfDuplicate) {
+    // 合併模式：使用現有案件的 ID 和 case_code
+    id = duplicate.id;
+    caseCode = duplicate.case_code || await generateCaseCode();
+    
+    // 合併數據
+    const mergedLead = mergeLeads(duplicate, leadData);
+    
+    // 更新案件
+    await updateLead(id, mergedLead, AuditAction.UPDATE);
+    
+    await logAction(id, AuditAction.UPDATE, duplicate, mergedLead);
+    return {
+      success: true,
+      leadId: id,
+      isDuplicate: true,
+      existingLead: duplicate
+    };
+  }
+  
+  // 新建模式
+  id = 'lead_' + Math.random().toString(36).substr(2, 9);
+  caseCode = await generateCaseCode();
   
   const newLead: Lead = {
     ...(leadData as Lead),
@@ -83,8 +225,13 @@ export const createLead = async (leadData: Partial<Lead>) => {
     created_by_name: creatorName,
     created_at: now,
     updated_at: now,
-    progress_updates: [],
-    change_history: [],
+    progress_updates: leadData.progress_updates || [],
+    change_history: leadData.change_history || [],
+    cost_records: leadData.cost_records || [],
+    profit_records: leadData.profit_records || [],
+    contracts: leadData.contracts || [],
+    links: leadData.links || [],
+    contact_status: leadData.contact_status || Decision.PENDING
   };
 
   // 如果使用 API 模式，先調用 API
@@ -95,7 +242,11 @@ export const createLead = async (leadData: Partial<Lead>) => {
         body: JSON.stringify(newLead),
       });
       await logAction(id, AuditAction.CREATE, null, newLead);
-      return id;
+      return {
+        success: true,
+        leadId: id,
+        isDuplicate: false
+      };
     } catch (error: any) {
       console.error('❌ API 創建案件失敗，降級到 localStorage:', error);
       console.error('錯誤詳情:', {
@@ -117,7 +268,11 @@ export const createLead = async (leadData: Partial<Lead>) => {
   saveLeads(leads);
   
   await logAction(id, AuditAction.CREATE, null, newLead);
-  return id;
+  return {
+    success: true,
+    leadId: id,
+    isDuplicate: false
+  };
 };
 
 // 記錄欄位變更

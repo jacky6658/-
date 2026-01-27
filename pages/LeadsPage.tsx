@@ -6,7 +6,7 @@ import LeadModal from '../components/LeadModal';
 import { STATUS_COLORS } from '../constants';
 import { createLead, updateLead, deleteLead } from '../services/leadService';
 import { extractLeadFromImage } from '../services/aiService';
-import { Plus, Search, Edit2, Trash2, Check, X, Loader2, Camera, Clock, UserCheck, Phone, Mail, MapPin, ChevronDown, ChevronUp, MessageSquare, Paperclip } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Check, X, Loader2, Camera, Clock, UserCheck, Phone, Mail, MapPin, ChevronDown, ChevronUp, MessageSquare, Paperclip, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 
 interface LeadsPageProps {
   leads: Lead[];
@@ -22,6 +22,10 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
   const [isScrolledToEnd, setIsScrolledToEnd] = useState(false);
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const aiFileInputRef = useRef<HTMLInputElement>(null);
+  
+  // 排序狀態
+  const [sortField, setSortField] = useState<keyof Lead | 'created_at'>('created_at');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   // 當leads更新時，同步更新selectedLead
   useEffect(() => {
@@ -135,11 +139,51 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
 
   const handleCreate = async (data: Partial<Lead>) => {
     try {
-      await createLead(data);
-      setIsModalOpen(false);
-      setSelectedLead(null);
-      // 顯示成功訊息
-      alert('✅ 案件已成功新增！');
+      const result = await createLead(data, false);
+      
+      if (result.isDuplicate && result.existingLead) {
+        // 發現重複案件，詢問用戶是否要合併
+        const existing = result.existingLead;
+        const duplicateInfo = `
+案件編號：${existing.case_code || '無'}
+平台：${existing.platform}
+案主：${existing.platform_id}
+狀態：${existing.status}
+建立時間：${new Date(existing.created_at).toLocaleString('zh-TW')}
+        `.trim();
+        
+        const userChoice = window.confirm(
+          `⚠️ 發現重複案件！\n\n${duplicateInfo}\n\n是否要合併到現有案件？\n\n點擊「確定」合併，點擊「取消」取消新增。`
+        );
+        
+        if (userChoice) {
+          // 用戶選擇合併
+          const mergeResult = await createLead(data, true);
+          if (mergeResult.success) {
+            setIsModalOpen(false);
+            setSelectedLead(null);
+            alert('✅ 案件已成功合併到現有案件！');
+            // 打開合併後的案件詳情
+            const mergedLead = leads.find(l => l.id === mergeResult.leadId);
+            if (mergedLead) {
+              setSelectedLead(mergedLead);
+              setIsModalOpen(true);
+            }
+          } else {
+            alert('❌ 合併失敗，請稍後再試');
+          }
+        } else {
+          // 用戶取消，不新增
+          alert('已取消新增案件');
+        }
+      } else if (result.success) {
+        // 成功新增
+        setIsModalOpen(false);
+        setSelectedLead(null);
+        alert('✅ 案件已成功新增！');
+      } else {
+        alert('❌ 新增失敗，請稍後再試');
+      }
     } catch (err) {
       console.error('新增案件失敗:', err);
       alert('❌ 新增失敗，請稍後再試');
@@ -214,12 +258,46 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
     await updateLead(lead.id, updates, AuditAction.DECISION);
   };
 
+  // 處理排序
+  const handleSort = (field: keyof Lead | 'created_at') => {
+    if (sortField === field) {
+      // 如果點擊同一個欄位，切換排序方向
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // 如果點擊不同欄位，設置新的排序欄位，預設降序
+      setSortField(field);
+      setSortDirection('desc');
+    }
+  };
+
+  // 獲取排序值
+  const getSortValue = (lead: Lead, field: keyof Lead | 'created_at'): string | number => {
+    if (field === 'created_at') {
+      return new Date(lead.created_at).getTime();
+    }
+    const value = lead[field];
+    if (value === null || value === undefined) return '';
+    if (typeof value === 'string') return value.toLowerCase();
+    if (typeof value === 'number') return value;
+    if (typeof value === 'object' && 'length' in value) return (value as any[]).length;
+    return String(value).toLowerCase();
+  };
+
   const filteredLeads = leads
     .filter(l => {
       const searchStr = search.toLowerCase();
-      return l.need.toLowerCase().includes(searchStr) || l.platform_id.toLowerCase().includes(searchStr);
+      return (l.need.toLowerCase().includes(searchStr) || 
+              l.platform_id.toLowerCase().includes(searchStr) ||
+              (l.case_code && l.case_code.toLowerCase().includes(searchStr)));
     })
-    .sort((a, b) => new Date(a.posted_at || a.created_at).getTime() - new Date(b.posted_at || b.created_at).getTime());
+    .sort((a, b) => {
+      const aValue = getSortValue(a, sortField);
+      const bValue = getSortValue(b, sortField);
+      
+      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '-';
@@ -283,13 +361,85 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ leads, userProfile }) => {
           <table className="min-w-[900px] sm:min-w-full divide-y divide-gray-100">
             <thead className="bg-gray-50/50 sticky top-0 z-10">
               <tr>
-                <th className="px-4 sm:px-6 py-4 sm:py-6 text-left text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">客戶 / 來源</th>
-                <th className="px-4 sm:px-6 py-4 sm:py-6 text-left text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-widest min-w-[200px]">需求內容 (點擊文字展開)</th>
-                <th className="px-4 sm:px-6 py-4 sm:py-6 text-left text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">聯絡資訊</th>
-                <th className="px-4 sm:px-6 py-4 sm:py-6 text-left text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-widest min-w-[180px]">備註與內部評語</th>
+                <th 
+                  className="px-4 sm:px-6 py-4 sm:py-6 text-left text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors"
+                  onClick={() => handleSort('platform_id')}
+                >
+                  <div className="flex items-center gap-2">
+                    客戶 / 來源
+                    {sortField === 'platform_id' ? (
+                      sortDirection === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
+                    ) : (
+                      <ArrowUpDown size={12} className="opacity-30" />
+                    )}
+                  </div>
+                </th>
+                <th 
+                  className="px-4 sm:px-6 py-4 sm:py-6 text-left text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-widest min-w-[200px] cursor-pointer hover:bg-gray-100 transition-colors"
+                  onClick={() => handleSort('need')}
+                >
+                  <div className="flex items-center gap-2">
+                    需求內容 (點擊文字展開)
+                    {sortField === 'need' ? (
+                      sortDirection === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
+                    ) : (
+                      <ArrowUpDown size={12} className="opacity-30" />
+                    )}
+                  </div>
+                </th>
+                <th 
+                  className="px-4 sm:px-6 py-4 sm:py-6 text-left text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors"
+                  onClick={() => handleSort('phone')}
+                >
+                  <div className="flex items-center gap-2">
+                    聯絡資訊
+                    {sortField === 'phone' ? (
+                      sortDirection === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
+                    ) : (
+                      <ArrowUpDown size={12} className="opacity-30" />
+                    )}
+                  </div>
+                </th>
+                <th 
+                  className="px-4 sm:px-6 py-4 sm:py-6 text-left text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-widest min-w-[180px] cursor-pointer hover:bg-gray-100 transition-colors"
+                  onClick={() => handleSort('internal_remarks')}
+                >
+                  <div className="flex items-center gap-2">
+                    備註與內部評語
+                    {sortField === 'internal_remarks' ? (
+                      sortDirection === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
+                    ) : (
+                      <ArrowUpDown size={12} className="opacity-30" />
+                    )}
+                  </div>
+                </th>
                 <th className="px-4 sm:px-6 py-4 sm:py-6 text-center text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">快速審核</th>
-                <th className="px-4 sm:px-6 py-4 sm:py-6 text-left text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">當前狀態</th>
-                <th className="px-4 sm:px-6 py-4 sm:py-6 text-right text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">操作</th>
+                <th 
+                  className="px-4 sm:px-6 py-4 sm:py-6 text-left text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors"
+                  onClick={() => handleSort('status')}
+                >
+                  <div className="flex items-center gap-2">
+                    當前狀態
+                    {sortField === 'status' ? (
+                      sortDirection === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
+                    ) : (
+                      <ArrowUpDown size={12} className="opacity-30" />
+                    )}
+                  </div>
+                </th>
+                <th 
+                  className="px-4 sm:px-6 py-4 sm:py-6 text-right text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors"
+                  onClick={() => handleSort('created_at')}
+                >
+                  <div className="flex items-center justify-end gap-2">
+                    操作
+                    {sortField === 'created_at' ? (
+                      sortDirection === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
+                    ) : (
+                      <ArrowUpDown size={12} className="opacity-30" />
+                    )}
+                  </div>
+                </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-100">

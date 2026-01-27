@@ -20,7 +20,7 @@ const ImportPage: React.FC<ImportPageProps> = () => {
 
   const processLeadData = async (leadData: any, totalRows: number, currentCount: number) => {
     try {
-      await createLead({
+      const result = await createLead({
         platform: (leadData.platform || 'FB') as Platform,
         platform_id: leadData.platform_id || 'Unknown',
         contact_status: (leadData.contact_status || '未回覆') as ContactStatus,
@@ -35,10 +35,16 @@ const ImportPage: React.FC<ImportPageProps> = () => {
         status: LeadStatus.TO_FILTER,
         decision: Decision.PENDING,
         priority: 3
-      });
-      const newCount = currentCount + 1;
-      setProgress(Math.floor((newCount / totalRows) * 100));
-      return newCount;
+      }, true); // 批量導入時自動合併重複案件
+      
+      if (result.success) {
+        const newCount = currentCount + 1;
+        setProgress(Math.floor((newCount / totalRows) * 100));
+        return newCount;
+      } else {
+        // 如果是重複且未合併，跳過
+        return currentCount;
+      }
     } catch (err) {
       console.error('Import row failed', err);
       return currentCount;
@@ -210,7 +216,7 @@ const ImportPage: React.FC<ImportPageProps> = () => {
         setProgress(50);
 
         // 創建案件
-        await createLead({
+        const result = await createLead({
           platform: parsed.platform,
           platform_id: parsed.platform_id,
           contact_status: ContactStatus.UNRESPONDED,
@@ -225,17 +231,21 @@ const ImportPage: React.FC<ImportPageProps> = () => {
           status: LeadStatus.TO_FILTER,
           decision: Decision.PENDING,
           priority: 3
-        });
+        }, true); // URL 導入時自動合併重複案件
 
         setProgress(100);
-        setMessage('✅ 成功匯入案件！');
+        if (result.isDuplicate) {
+          setMessage('✅ 案件已合併到現有案件！');
+        } else {
+          setMessage('✅ 成功匯入案件！');
+        }
         setUrlInput('');
       } else {
         // 其他平台的 URL，創建通用案件
         setMessage('正在創建案件...');
         setProgress(50);
 
-        await createLead({
+        const result = await createLead({
           platform: Platform.OTHER,
           platform_id: 'URL Import',
           contact_status: ContactStatus.UNRESPONDED,
@@ -250,7 +260,7 @@ const ImportPage: React.FC<ImportPageProps> = () => {
           status: LeadStatus.TO_FILTER,
           decision: Decision.PENDING,
           priority: 3
-        });
+        }, true); // URL 導入時自動合併重複案件
 
         setProgress(100);
         setMessage('✅ 成功匯入案件！');

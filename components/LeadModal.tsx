@@ -66,54 +66,67 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
     const isModalJustOpened = !prevIsOpenRef.current && isOpen;
     const isDifferentLead = prevInitialDataIdRef.current !== (propInitialData?.id || null);
     
-    if (initialData) {
-      // 更新內部狀態
-      setInitialData(initialData);
-      
-      setFormData({
-        ...initialData,
-        // 確保所有可能為 null 的欄位都轉換為空字符串
-        need: initialData.need || '',
-        budget_text: initialData.budget_text || '',
-        platform_id: initialData.platform_id || '',
-        phone: initialData.phone || '',
-        email: initialData.email || '',
-        location: initialData.location || '',
-        estimated_duration: initialData.estimated_duration || '',
-        contact_method: initialData.contact_method || '',
-        note: initialData.note || '',
-        internal_remarks: initialData.internal_remarks || '',
-        posted_at: initialData.posted_at ? initialData.posted_at.split('T')[0] : new Date().toISOString().split('T')[0]
-      });
-      setIsAiFilled(false);
-    } else {
-      setFormData({
-        platform: Platform.FB,
-        contact_status: ContactStatus.UNRESPONDED,
-        status: LeadStatus.TO_FILTER,
-        priority: 3,
-        need: '',
-        budget_text: '',
-        platform_id: '',
-        phone: '',
-        email: '',
-        location: '',
-        estimated_duration: '',
-        contact_method: '',
-        note: '',
-        internal_remarks: '',
-        posted_at: new Date().toISOString().split('T')[0],
-        links: []
-      });
-      setIsAiFilled(false);
-    }
-    
-    // 只在 Modal 剛打開或切換到不同案件時才重置進度相關狀態
+    // 只在 Modal 剛打開或切換到不同案件時才重置表單數據
+    // 這樣可以避免在用戶輸入過程中覆蓋輸入內容
     if (isModalJustOpened || isDifferentLead) {
+      // 過濾掉「未提供」字符串，將其轉換為空字符串
+      const cleanValue = (value: string | null | undefined): string => {
+        if (!value || value === '未提供' || value.trim() === '') return '';
+        return value;
+      };
+      
+      if (propInitialData) {
+        // 更新內部狀態
+        setInitialData(propInitialData);
+        
+        setFormData({
+          ...propInitialData,
+          // 確保所有可能為 null 的欄位都轉換為空字符串，並過濾「未提供」
+          need: cleanValue(propInitialData.need),
+          budget_text: cleanValue(propInitialData.budget_text),
+          platform_id: cleanValue(propInitialData.platform_id),
+          phone: cleanValue(propInitialData.phone),
+          email: cleanValue(propInitialData.email),
+          location: cleanValue(propInitialData.location),
+          estimated_duration: cleanValue(propInitialData.estimated_duration),
+          contact_method: cleanValue(propInitialData.contact_method),
+          note: cleanValue(propInitialData.note),
+          internal_remarks: cleanValue(propInitialData.internal_remarks),
+          posted_at: propInitialData.posted_at ? propInitialData.posted_at.split('T')[0] : new Date().toISOString().split('T')[0]
+        });
+        setIsAiFilled(false);
+      } else {
+        setInitialData(null);
+        setFormData({
+          platform: Platform.FB,
+          contact_status: ContactStatus.UNRESPONDED,
+          status: LeadStatus.TO_FILTER,
+          priority: 3,
+          need: '',
+          budget_text: '',
+          platform_id: '',
+          phone: '',
+          email: '',
+          location: '',
+          estimated_duration: '',
+          contact_method: '',
+          note: '',
+          internal_remarks: '',
+          posted_at: new Date().toISOString().split('T')[0],
+          links: []
+        });
+        setIsAiFilled(false);
+      }
+      
+      // 重置進度相關狀態
       setProgressContent('');
       setProgressAttachments([]);
       setProgressUrlInput('');
       setShowHistory(false);
+    } else if (propInitialData && propInitialData.id === prevInitialDataIdRef.current) {
+      // 如果是同一個案件，只更新 initialData 但不重置 formData
+      // 這樣可以保持用戶正在輸入的內容
+      setInitialData(propInitialData);
     }
     
     // 更新 ref 值
@@ -429,70 +442,108 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
 
   // 添加成本記錄
   const handleAddCost = async () => {
-    if (!costItemName.trim() || !costAmount || !initialData?.id) return;
+    if (!costItemName.trim() || !costAmount) return;
     const amount = parseFloat(costAmount);
     if (isNaN(amount) || amount <= 0) {
       alert('請輸入有效的金額');
       return;
     }
 
-    try {
-      const newCost = await addCostRecord(initialData.id, {
-        item_name: costItemName.trim(),
-        amount: amount,
-        author_uid: userRole === Role.ADMIN ? 'admin' : 'user',
-        author_name: userName,
-        note: costNote.trim() || undefined
-      });
+    const newCost: CostRecord = {
+      id: 'cost_' + Math.random().toString(36).substr(2, 9),
+      lead_id: initialData?.id || 'temp',
+      item_name: costItemName.trim(),
+      amount: amount,
+      author_uid: userRole === Role.ADMIN ? 'admin' : 'user',
+      author_name: userName,
+      created_at: new Date().toISOString(),
+      note: costNote.trim() || undefined
+    };
 
-      if (newCost) {
-        const updatedCosts = [...(initialData.cost_records || []), newCost];
-        const updatedLead = { ...initialData, cost_records: updatedCosts };
-        setInitialData(updatedLead);
-        onSubmit({ cost_records: updatedCosts });
+    // 如果是編輯模式，調用 API
+    if (initialData?.id) {
+      try {
+        const addedCost = await addCostRecord(initialData.id, {
+          item_name: newCost.item_name,
+          amount: newCost.amount,
+          author_uid: newCost.author_uid,
+          author_name: newCost.author_name,
+          note: newCost.note
+        });
 
-        setCostItemName('');
-        setCostAmount('');
-        setCostNote('');
+        if (addedCost) {
+          const updatedCosts = [...(initialData.cost_records || []), addedCost];
+          const updatedLead = { ...initialData, cost_records: updatedCosts };
+          setInitialData(updatedLead);
+          onSubmit({ cost_records: updatedCosts });
+        }
+      } catch (error) {
+        console.error('添加成本記錄失敗:', error);
+        alert('添加成本記錄失敗');
+        return;
       }
-    } catch (error) {
-      console.error('添加成本記錄失敗:', error);
-      alert('添加成本記錄失敗');
+    } else {
+      // 新增模式：直接添加到 formData
+      const updatedCosts = [...(formData.cost_records || []), newCost];
+      setFormData({ ...formData, cost_records: updatedCosts });
     }
+
+    setCostItemName('');
+    setCostAmount('');
+    setCostNote('');
   };
 
   // 添加利潤記錄
   const handleAddProfit = async () => {
-    if (!profitItemName.trim() || !profitAmount || !initialData?.id) return;
+    if (!profitItemName.trim() || !profitAmount) return;
     const amount = parseFloat(profitAmount);
     if (isNaN(amount) || amount <= 0) {
       alert('請輸入有效的金額');
       return;
     }
 
-    try {
-      const newProfit = await addProfitRecord(initialData.id, {
-        item_name: profitItemName.trim(),
-        amount: amount,
-        author_uid: userRole === Role.ADMIN ? 'admin' : 'user',
-        author_name: userName,
-        note: profitNote.trim() || undefined
-      });
+    const newProfit: ProfitRecord = {
+      id: 'profit_' + Math.random().toString(36).substr(2, 9),
+      lead_id: initialData?.id || 'temp',
+      item_name: profitItemName.trim(),
+      amount: amount,
+      author_uid: userRole === Role.ADMIN ? 'admin' : 'user',
+      author_name: userName,
+      created_at: new Date().toISOString(),
+      note: profitNote.trim() || undefined
+    };
 
-      if (newProfit) {
-        const updatedProfits = [...(initialData.profit_records || []), newProfit];
-        const updatedLead = { ...initialData, profit_records: updatedProfits };
-        setInitialData(updatedLead);
-        onSubmit({ profit_records: updatedProfits });
+    // 如果是編輯模式，調用 API
+    if (initialData?.id) {
+      try {
+        const addedProfit = await addProfitRecord(initialData.id, {
+          item_name: newProfit.item_name,
+          amount: newProfit.amount,
+          author_uid: newProfit.author_uid,
+          author_name: newProfit.author_name,
+          note: newProfit.note
+        });
 
-        setProfitItemName('');
-        setProfitAmount('');
-        setProfitNote('');
+        if (addedProfit) {
+          const updatedProfits = [...(initialData.profit_records || []), addedProfit];
+          const updatedLead = { ...initialData, profit_records: updatedProfits };
+          setInitialData(updatedLead);
+          onSubmit({ profit_records: updatedProfits });
+        }
+      } catch (error) {
+        console.error('添加利潤記錄失敗:', error);
+        alert('添加利潤記錄失敗');
+        return;
       }
-    } catch (error) {
-      console.error('添加利潤記錄失敗:', error);
-      alert('添加利潤記錄失敗');
+    } else {
+      // 新增模式：直接添加到 formData
+      const updatedProfits = [...(formData.profit_records || []), newProfit];
+      setFormData({ ...formData, profit_records: updatedProfits });
     }
+
+    setProfitItemName('');
+    setProfitAmount('');
+    setProfitNote('');
   };
 
   // 處理合約文件上傳
@@ -541,16 +592,22 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
     if (userRole !== Role.ADMIN) return;
     if (!window.confirm('確定要刪除此成本記錄嗎？')) return;
     
-    if (!initialData?.id) return;
-    try {
-      await deleteCostRecord(initialData.id, costId);
-      const updatedCosts = (initialData.cost_records || []).filter(c => c.id !== costId);
-      const updatedLead = { ...initialData, cost_records: updatedCosts };
-      setInitialData(updatedLead);
-      onSubmit({ cost_records: updatedCosts });
-    } catch (error) {
-      console.error('刪除成本記錄失敗:', error);
-      alert('刪除成本記錄失敗');
+    // 如果是編輯模式，調用 API
+    if (initialData?.id) {
+      try {
+        await deleteCostRecord(initialData.id, costId);
+        const updatedCosts = (initialData.cost_records || []).filter(c => c.id !== costId);
+        const updatedLead = { ...initialData, cost_records: updatedCosts };
+        setInitialData(updatedLead);
+        onSubmit({ cost_records: updatedCosts });
+      } catch (error) {
+        console.error('刪除成本記錄失敗:', error);
+        alert('刪除成本記錄失敗');
+      }
+    } else {
+      // 新增模式：直接從 formData 中移除
+      const updatedCosts = (formData.cost_records || []).filter(c => c.id !== costId);
+      setFormData({ ...formData, cost_records: updatedCosts });
     }
   };
 
@@ -559,16 +616,22 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
     if (userRole !== Role.ADMIN) return;
     if (!window.confirm('確定要刪除此利潤記錄嗎？')) return;
     
-    if (!initialData?.id) return;
-    try {
-      await deleteProfitRecord(initialData.id, profitId);
-      const updatedProfits = (initialData.profit_records || []).filter(p => p.id !== profitId);
-      const updatedLead = { ...initialData, profit_records: updatedProfits };
-      setInitialData(updatedLead);
-      onSubmit({ profit_records: updatedProfits });
-    } catch (error) {
-      console.error('刪除利潤記錄失敗:', error);
-      alert('刪除利潤記錄失敗');
+    // 如果是編輯模式，調用 API
+    if (initialData?.id) {
+      try {
+        await deleteProfitRecord(initialData.id, profitId);
+        const updatedProfits = (initialData.profit_records || []).filter(p => p.id !== profitId);
+        const updatedLead = { ...initialData, profit_records: updatedProfits };
+        setInitialData(updatedLead);
+        onSubmit({ profit_records: updatedProfits });
+      } catch (error) {
+        console.error('刪除利潤記錄失敗:', error);
+        alert('刪除利潤記錄失敗');
+      }
+    } else {
+      // 新增模式：直接從 formData 中移除
+      const updatedProfits = (formData.profit_records || []).filter(p => p.id !== profitId);
+      setFormData({ ...formData, profit_records: updatedProfits });
     }
   };
 
@@ -610,6 +673,14 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
     if (formData.posted_at) {
       updatedData.posted_at = new Date(formData.posted_at).toISOString();
     }
+    // 確保可選欄位（電話、email、地點、預計製作週期、客戶聯繫方式）如果為空字符串則設為 null
+    // 這樣後端可以正確處理，避免保存空字符串
+    const optionalFields = ['phone', 'email', 'location', 'estimated_duration', 'contact_method'];
+    optionalFields.forEach(field => {
+      if (updatedData[field as keyof typeof updatedData] === '') {
+        (updatedData as any)[field] = null;
+      }
+    });
     onSubmit(updatedData);
   };
 
@@ -828,7 +899,7 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
               <div className="space-y-2">
                 <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">電話</label>
                 <input 
-                  type="tel" 
+                  type="text" 
                   placeholder="例如：0912-345-678"
                   className={`w-full rounded-2xl border-2 p-4 font-black transition-all ${isAiFilled ? 'border-indigo-200 bg-indigo-50/30' : 'border-slate-100 bg-slate-50 focus:bg-white focus:border-indigo-500'} text-slate-800`}
                   value={formData.phone || ''}
@@ -838,7 +909,7 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
               <div className="space-y-2">
                 <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Email</label>
                 <input 
-                  type="email" 
+                  type="text" 
                   placeholder="例如：example@email.com"
                   className={`w-full rounded-2xl border-2 p-4 font-black transition-all ${isAiFilled ? 'border-indigo-200 bg-indigo-50/30' : 'border-slate-100 bg-slate-50 focus:bg-white focus:border-indigo-500'} text-slate-800`}
                   value={formData.email || ''}
@@ -1107,9 +1178,8 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
               </section>
             )}
 
-            {/* 成本和利潤記錄 - 僅在編輯模式下顯示 */}
-            {initialData?.id && (
-              <section className="space-y-6">
+            {/* 成本和利潤記錄 - 新增和編輯模式都顯示 */}
+            <section className="space-y-6">
                 {/* 成本記錄 */}
                 <div className="p-6 bg-gradient-to-br from-red-50 to-orange-50 rounded-2xl border-2 border-red-200">
                   <div className="flex items-center gap-2 mb-4">
@@ -1181,7 +1251,7 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
 
                   {/* 成本記錄列表 */}
                   <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {(initialData.cost_records || []).map((cost: CostRecord) => (
+                    {((initialData?.cost_records || formData.cost_records) || []).map((cost: CostRecord) => (
                       <div key={cost.id} className="bg-white/80 rounded-xl p-3 border border-red-100 relative group">
                         {userRole === Role.ADMIN && (
                           <button
@@ -1203,7 +1273,7 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
                         </div>
                       </div>
                     ))}
-                    {(!initialData.cost_records || initialData.cost_records.length === 0) && (
+                    {((initialData?.cost_records || formData.cost_records) || []).length === 0 && (
                       <p className="text-sm text-red-600/70 text-center py-4">尚無成本記錄</p>
                     )}
                   </div>
@@ -1257,7 +1327,7 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
 
                   {/* 利潤記錄列表 */}
                   <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {(initialData.profit_records || []).map((profit: ProfitRecord) => (
+                    {((initialData?.profit_records || formData.profit_records) || []).map((profit: ProfitRecord) => (
                       <div key={profit.id} className="bg-white/80 rounded-xl p-3 border border-green-100 relative group">
                         {userRole === Role.ADMIN && (
                           <button
@@ -1279,13 +1349,12 @@ const LeadModal: React.FC<LeadModalProps> = ({ isOpen, onClose, onSubmit, initia
                         </div>
                       </div>
                     ))}
-                    {(!initialData.profit_records || initialData.profit_records.length === 0) && (
+                    {((initialData?.profit_records || formData.profit_records) || []).length === 0 && (
                       <p className="text-sm text-green-600/70 text-center py-4">尚無利潤記錄</p>
                     )}
                   </div>
                 </div>
-              </section>
-            )}
+            </section>
 
             {/* 合約文件 - 僅在編輯模式下顯示 */}
             {initialData?.id && (
