@@ -33,10 +33,50 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ leads, onSelectLead, userRole
   const handleContextMenu = (e: React.MouseEvent, lead: Lead) => {
     e.preventDefault();
     e.stopPropagation();
+    
+    // 計算選單位置，確保不會超出視窗範圍
+    const menuWidth = 200; // 選單寬度
+    const menuItemHeight = 42; // 每個選單項目的高度（包含 padding）
+    const headerHeight = 40; // 標題區域高度
+    const padding = 16; // 上下 padding
+    const availableStatuses = STATUS_OPTIONS.filter(status => status !== LeadStatus.TO_IMPORT && status !== lead.status);
+    const estimatedMenuHeight = headerHeight + (availableStatuses.length * menuItemHeight) + padding;
+    
+    let x = e.clientX;
+    let y = e.clientY;
+    
+    // 檢查右邊界
+    if (x + menuWidth / 2 > window.innerWidth) {
+      x = window.innerWidth - menuWidth / 2 - 10;
+    }
+    // 檢查左邊界
+    if (x - menuWidth / 2 < 0) {
+      x = menuWidth / 2 + 10;
+    }
+    
+    // 檢查底邊界 - 如果選單會超出底部，則向上顯示
+    const spaceBelow = window.innerHeight - y;
+    const spaceAbove = y;
+    
+    if (spaceBelow < estimatedMenuHeight) {
+      // 底部空間不足，向上顯示
+      if (spaceAbove >= estimatedMenuHeight) {
+        // 上方有足夠空間，從點擊位置向上顯示
+        y = e.clientY - estimatedMenuHeight;
+      } else {
+        // 上方空間也不足，貼近底部顯示，並啟用滾動
+        y = window.innerHeight - estimatedMenuHeight - 10;
+        if (y < 10) y = 10; // 確保不會超出頂部
+      }
+    } else {
+      // 底部空間足夠，從點擊位置向下顯示
+      y = e.clientY;
+    }
+    
     setContextMenu({
       lead,
-      x: e.clientX,
-      y: e.clientY
+      x,
+      y
     });
   };
 
@@ -135,11 +175,12 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ leads, onSelectLead, userRole
           />
           <div
             ref={contextMenuRef}
-            className="fixed z-50 bg-white rounded-xl shadow-2xl border border-gray-200 py-2 min-w-[200px]"
+            className="fixed z-50 bg-white rounded-xl shadow-2xl border border-gray-200 py-2 min-w-[200px] max-h-[80vh] overflow-y-auto"
             style={{
               left: `${contextMenu.x}px`,
               top: `${contextMenu.y}px`,
-              transform: 'translate(-50%, -10px)'
+              transform: 'translate(-50%, 0)',
+              maxWidth: 'calc(100vw - 20px)'
             }}
           >
             <div className="px-4 py-2 border-b border-gray-100">
